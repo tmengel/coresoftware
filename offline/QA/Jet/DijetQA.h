@@ -38,6 +38,7 @@ class DijetQA : public SubsysReco
    */
   int process_event(PHCompositeNode *topNode) override;
   void FindPairs(JetContainer *);
+  int grab_zvrtx(PHCompositeNode *topNode); // grab the zvrtx from the global vertex node and fill the member variable, return 0 if successful, 1 if not
 
   /// Called at the end of all processing.
   int End(PHCompositeNode *topNode) override;
@@ -124,6 +125,36 @@ class DijetQA : public SubsysReco
   std::pair<float, float> m_etaRange{-0.7, 0.7};
   std::pair<float, float> m_ptLeadRange{1, 100};
   std::pair<float, float> m_ptSubRange{1, 100};
+
+
+  // easy function to check if a jet is within the detector acceptance, given the jet eta, the jet radius, and the z vertex position
+  static bool jet_in_calo_acceptance( const float eta, const float R, const float z )
+  {
+      const float CALO_ABS_Z[3] = {130.23, 170.299, 301.683};
+      const float CALO_RADIUS[3] = {93.5, 127.503, 225.87};
+      float min_eta = -999, MAX_eta = 999;
+      for (int i=0; i<3; i++) 
+      {
+        float min_z = -1.0*CALO_ABS_Z[i];
+        float max_z = CALO_ABS_Z[i];
+        float z_l = min_z - zvrtx;
+        float z_h = max_z - zvrtx;
+        float r = CALO_RADIUS[i];
+        float eta_min = asinh( z_l / r );
+        float eta_max = asinh( z_h / r );
+        if ( eta_min > min_eta ) { min_eta = eta_min; }
+        if ( eta_max < MAX_eta ) { MAX_eta = eta_max; }
+      }
+      min_eta += R;
+      MAX_eta -= R;
+      return (eta >= min_eta && eta <= MAX_eta);
+  }
+
+  
+
+  
+
+
 };
 
 #endif  // DIJETQA_H

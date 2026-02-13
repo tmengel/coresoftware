@@ -94,6 +94,77 @@ int DijetQA::Init(PHCompositeNode* /*topNode*/)
 }
 
 //____________________________________________________________________________..
+int DijetQA::grab_zvrtx(PHCompositeNode* topNode)
+{
+  if (Verbosity() > 1)
+  {
+    std::cout << "DijetQA::grab_zvrtx(PHCompositeNode *topNode) Grabbing vertex" << std::endl;
+  }
+  m_zvtx = 0;  // default to 0
+
+
+  auto * vertexmap = findNode::getClass< GlobalVertexMap >(topNode, "GlobalVertexMap");
+  if ( !vertexmap || vertexmap->empty() )
+  {
+    std::cout << "DijetQA::grab_zvrtx - couldn't find it.. assuming vertex z = 0" << std::endl;
+    m_zvtx = 0;
+    return Fun4AllReturnCodes::EVENT_OK;
+  }
+
+  auto * vertices = vertexmap -> get_gvtxs_with_type( GlobalVertex::MBD );
+  if ( !vertices || vertices->empty() )
+  {
+    auto vtx = vertexmap -> begin()-> second;
+    if ( vtx )
+    {
+      m_zvtx = vtx->get_z();
+    }
+    else
+    {
+      std::cout << "DijetQA::grab_zvrtx - couldn't find vertex in map.. assuming vertex z = 0" << std::endl;
+      m_zvtx = 0;
+    }
+    return Fun4AllReturnCodes::EVENT_OK;
+  }
+
+  // why wouldn't this be true
+  if (  vertices->at(0) )
+  {
+    m_zvtx = vertices->at(0)->get_z();
+  }
+  else
+  {
+    std::cout << "DijetQA::grab_zvrtx - couldn't find vertex in map.. assuming vertex z = 0" << std::endl;
+    m_zvtx = 0;
+    return Fun4AllReturnCodes::EVENT_OK;
+  }
+
+  // check if the vertex z is nan or unreasonably large, if so set to 0 and print a warning (only once)
+  static bool once = true;
+  if ( std::isnan(m_zvtx) )
+  {
+    if ( once )
+    {
+      std::cout << "DijetQA::grab_zvrtx - vertex z is nan.. assuming vertex z = 0" << std::endl;
+      once = false;
+    }
+    m_zvtx = 0;
+    return Fun4AllReturnCodes::EVENT_OK;
+  }
+  else if ( std::abs(m_zvtx) > 1e3 )
+  {
+    if ( once )
+    {
+      std::cout << "DijetQA::grab_zvrtx - vertex z is very large (|z| > 1e3).. assuming vertex z = 0" << std::endl;
+      once = false;
+    }
+    m_zvtx = 0;
+    return Fun4AllReturnCodes::EVENT_OK;
+  }
+
+  return Fun4AllReturnCodes::EVENT_OK;
+}
+
 int DijetQA::process_event(PHCompositeNode* topNode)
 {
   if (Verbosity() > 1)
@@ -125,29 +196,10 @@ int DijetQA::process_event(PHCompositeNode* topNode)
       m_centrality = cent_node->get_centile(CentralityInfo::PROP::bimp);
       m_impactparam = cent_node->get_quantity(CentralityInfo::PROP::bimp);
     }*/
-  GlobalVertex* vtx = nullptr;
-  GlobalVertexMap* vtxmap = findNode::getClass<GlobalVertexMap>(topNode, "GlobalVertexMap");
-  if (!vtxmap || vtxmap->empty())
-  {
-    if (!vtxmap)
-    {
-      std::cout << "DijetQA::process_event - Error can not find vtxmap node " << "GlobalVertexMap" << std::endl;
-    }
-    if (Verbosity() > 1)
-    {
-      if (vtxmap->empty())
-      {
-        std::cout << "No vertex map found, assuming the vertex has z=0" << std::endl;
-      }
-    }
-    m_zvtx = 0;
-  }
-  else
-  {
-    vtx = vtxmap->begin()->second;
-    m_zvtx = vtx->get_z();
-  }
-  JetContainer* jets = findNode::getClass<JetContainer>(topNode, m_recoJetName);
+  
+  grab_zvrtx(topNode);
+
+  auto * jets = findNode::getClass<JetContainer>(topNode, m_recoJetName);
   if (!jets)
   {
     std::cout << "DijetQA::process_event - Error can not find jets node " << m_recoJetName << std::endl;
@@ -157,6 +209,7 @@ int DijetQA::process_event(PHCompositeNode* topNode)
     }
     return Fun4AllReturnCodes::EVENT_OK;
   }
+
 
   FindPairs(jets);
 
@@ -170,7 +223,11 @@ void DijetQA::FindPairs(JetContainer* jets)
   {
     std::cout << "JetKinematicCheck::process_event(PHCompositeNode *topNode) Processing Event" << std::endl;
   }
-  Jet* jet_leading = nullptr;
+  
+  const float _jet_R = jets->get_jetpar_R();
+  
+  Jet * jet_leading = nullptr;
+
   float pt_leading = 0;
   float pt1 = 0;
   float pt2 = 0;
