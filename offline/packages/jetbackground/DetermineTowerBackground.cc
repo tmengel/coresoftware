@@ -1045,7 +1045,7 @@ int DetermineTowerBackground::process_event(PHCompositeNode *topNode)
             dphi += 2 * M_PI;
           }
           float dR = sqrt(pow(deta, 2) + pow(dphi, 2));
-          if (dR < 0.4)
+          if (dR < 0.3)
           {
             isExcluded = true;
             if (Verbosity() > 10)
