@@ -46,7 +46,7 @@ class DetermineTowerBackground : public SubsysReco
   void SetSeedJetD(float D) { _seed_jet_D = D; };
   void SetSeedJetPt(float pt) { _seed_jet_pt = pt; };
   void SetSeedMaxConst(float max_const) { _seed_max_const = max_const; };
-
+  void SetSeedExclusionDR(float dr) { _seed_exclusion_DR = dr; };
   void UseReweighting(bool do_reweight ) {  _do_reweight = do_reweight; }
 
   void set_towerNodePrefix(const std::string &prefix)
@@ -102,6 +102,7 @@ class DetermineTowerBackground : public SubsysReco
   float _seed_jet_D{4.0};
   float _seed_max_const{3.0};
   float _seed_jet_pt{7.0};
+  float _seed_exclusion_DR{0.4};
 
   std::vector<float> _seed_eta;
   std::vector<float> _seed_phi;

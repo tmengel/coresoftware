@@ -70,6 +70,8 @@ int DetermineTowerBackground::InitRun(PHCompositeNode *topNode)
 
     }
   
+
+  std::cout << "USING LOCAL BUILD\n\n";
   return CreateNode(topNode);
 }
 
@@ -1045,7 +1047,7 @@ int DetermineTowerBackground::process_event(PHCompositeNode *topNode)
             dphi += 2 * M_PI;
           }
           float dR = sqrt(pow(deta, 2) + pow(dphi, 2));
-          if (dR < 0.3)
+          if (dR < _seed_exclusion_DR)
           {
             isExcluded = true;
             if (Verbosity() > 10)
