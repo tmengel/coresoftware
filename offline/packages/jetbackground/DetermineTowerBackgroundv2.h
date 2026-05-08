@@ -24,14 +24,31 @@ class GlobalVertex;
 class DetermineTowerBackgroundv2 : public SubsysReco
 {
  public:
+
+  enum FlowMode { NoFlow = 0, EBE = 1, AVG = 2};
+  enum Psi2Mode { NoPsi2 = 0, Calo = 1, Truth = 2, sEPD = 3 };
+
   DetermineTowerBackgroundv2(const std::string &name = "DetermineTowerBackgroundv2");
   ~DetermineTowerBackgroundv2() override {}
 
   int InitRun(PHCompositeNode *topNode) override;
   int process_event(PHCompositeNode *topNode) override;
 
+  void SetVertexType( GlobalVertex::VTXTYPE vertex_type) { m_vertex_type = {vertex_type}; }
+
   void SetBackgroundOutputName(const std::string &name) { m_background_node = name; }
   
+  void SetFlowMode(int mode) { m_flow_mode = mode; }
+  void SetPsi2Mode(int mode) { m_psi2_mode = mode; }
+
+  void SetSeedType(int seed_type) { m_seed_type = seed_type; }
+  void SetSeedJetName(std::string &name) { m_seed_jet_name = name; }
+  
+  void SetSeedJetPt(float pt) { m_seed_jet_pt = pt; }
+  void SetNOmitSeeds(int n) { m_n_omit_seeds = n; } 
+
+  void SetOverwriteCaloV2(std::string &url) { m_overwrite_average_calo_v2_path = url; }
+  void SetCalibName(const std::string &name) { m_calib_name = name; }
   void SetIHCAL_GeomNode(const std::string &name) { m_ihcal_geom_node = name; }
   void SetOHCAL_GeomNode(const std::string &name) { m_ohcal_geom_node = name; }
   void SetCEMC_GeomNode(const std::string &name) { m_cemc_geom_node = name; } 
@@ -39,18 +56,6 @@ class DetermineTowerBackgroundv2 : public SubsysReco
   void SetOHCAL_TowerInfoNode(const std::string &name) { m_ohcal_towerinfo_node = name; }
   void SetCEMC_TowerInfoNode(const std::string &name) { m_cemc_towerinfo_node = name; }
   void SetCEMC_RetowerInfoNode(const std::string &name) { m_cemc_retowerinfo_node = name; }
-  
-  void SetCalibName(const std::string &name) { m_calib_name = name; }
-
-  void SetFlowMode(int mode) { m_flow_mode = mode; }
-  void SetPsi2Mode(int mode) { m_psi2_mode = mode; }
-  void SetSeedType(int seed_type) { m_seed_type = seed_type; }
-
-  void SetOverwriteCaloV2(std::string &url) { m_overwrite_average_calo_v2_path = url; }
-  void SetSeedJetPt(float pt) { m_seed_jet_pt = pt; };
-  void SetNOmitSeeds(int n) { m_n_omit_seeds = n; }
-  void SetSeedJetName(std::string &name) { m_seed_jet_name = name; }
-
 
  private:
 
@@ -62,21 +67,28 @@ class DetermineTowerBackgroundv2 : public SubsysReco
   int init_event(PHCompositeNode *topNode);
   int get_psi2(PHCompositeNode *topNode);
   int get_v2(PHCompositeNode *topNode);
-
-
   int LoadCalibrations();
+  int fill_energy_vectors(PHCompositeNode *topNode, Jet::SRC src);
 
-  std::string m_calib_name            = "JET_AVERAGE_CALO_V2_SEPD_PSI2";
   std::string m_background_node       = "TestTowerBackground";
+  std::string m_seed_jet_name {""};
+  std::string m_overwrite_average_calo_v2_path {""};
 
-  std::string m_ihcal_geom_node       = "TOWERGEOM_HCALIN";
-  std::string m_ohcal_geom_node       = "TOWERGEOM_HCALOUT";
-  std::string m_cemc_geom_node        = "TOWERGEOM_CEMC";
+  int m_flow_mode = FlowMode::NoFlow;
+  int m_psi2_mode = Psi2Mode::sEPD;
 
-  std::string m_ihcal_towerinfo_node  = "TOWERINFO_CALIB_HCALIN";
-  std::string m_ohcal_towerinfo_node  = "TOWERINFO_CALIB_HCALOUT";
-  std::string m_cemc_towerinfo_node   = "TOWERINFO_CALIB_CEMC";
-  std::string m_cemc_retowerinfo_node = "TOWERINFO_CALIB_CEMC_RETOWER";
+  int m_seed_type     = 0; // 0 = D, 1 = pT
+  int m_n_omit_seeds  = 2;
+  float m_seed_jet_pt = 5.0;
+
+  std::vector<float> m_cent_avg_v2 {};
+
+    
+  bool m_is_flow_failure = false;
+  float m_v2    = 0;
+  float m_psi2  = 0;
+  int m_nstrips = 0;
+  int m_ntowers = 0;
 
   float m_ihcal_r = 0.0;
   float m_ohcal_r = 0.0;
@@ -84,6 +96,7 @@ class DetermineTowerBackgroundv2 : public SubsysReco
 
   int m_num_eta_ihcal = 0;
   int m_num_phi_ihcal = 0;
+
   std::vector<float> m_eta_bin_edges {};
   std::vector<float> m_z0_bin_edges {};
 
@@ -102,33 +115,22 @@ class DetermineTowerBackgroundv2 : public SubsysReco
   float m_vtxz = 0.0;
   std::vector<GlobalVertex::VTXTYPE> m_vertex_type = {GlobalVertex::MBD};
 
-  std::string m_overwrite_average_calo_v2_path {""};
-  std:: string m_seed_jet_name {""};
-  
-  int m_flow_mode = 0;
-  int m_psi2_mode = 3;
-
-  bool m_is_flow_failure = false;
-  float m_v2    = 0;
-  float m_psi2  = 0;
-  int m_nstrips = 0;
-  int m_ntowers = 0;
-
-  std::vector<float> m_cent_avg_v2 {};
-
   RawTowerDefs::CalorimeterId m_caloid = RawTowerDefs::CalorimeterId::NONE;
   TowerInfoContainer    * m_towerinfos = nullptr;
   RawTowerGeomContainer * m_towergeom = nullptr;
   RawTowerGeomContainer * m_ihcal_geom = nullptr;    
 
-  int m_seed_type     = 0; // 0 = D, 1 = pT
-  int m_n_omit_seeds  = 2;
-  float m_seed_jet_pt = 5.0;
-
   Jet::PROPERTY m_idx_seedD    = Jet::PROPERTY::no_property;
   Jet::PROPERTY m_idx_seed_itr = Jet::PROPERTY::no_property;
 
-  int fill_energy_vectors(PHCompositeNode *topNode, Jet::SRC src);
+  std::string m_calib_name            = "JET_AVERAGE_CALO_V2_SEPD_PSI2";
+  std::string m_ihcal_geom_node       = "TOWERGEOM_HCALIN";
+  std::string m_ohcal_geom_node       = "TOWERGEOM_HCALOUT";
+  std::string m_cemc_geom_node        = "TOWERGEOM_CEMC";
+  std::string m_ihcal_towerinfo_node  = "TOWERINFO_CALIB_HCALIN";
+  std::string m_ohcal_towerinfo_node  = "TOWERINFO_CALIB_HCALOUT";
+  std::string m_cemc_towerinfo_node   = "TOWERINFO_CALIB_CEMC";
+  std::string m_cemc_retowerinfo_node = "TOWERINFO_CALIB_CEMC_RETOWER";
 
 };
 
