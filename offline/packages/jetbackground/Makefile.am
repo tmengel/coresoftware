@@ -44,6 +44,7 @@ pkginclude_HEADERS = \
   BaseBeamBackgroundFilter.h \
   CopyAndSubtractJets.h \
   DetermineTowerBackground.h \
+  DetermineTowerBackgroundv2.h \
   DetermineEventRho.h \
   DetermineTowerRho.h \
   EventRho.h \
@@ -55,6 +56,7 @@ pkginclude_HEADERS = \
   StreakSidebandFilter.h \
   SubtractTowers.h \
   SubtractTowersCS.h \
+  SubtractTowersRho.h \
   TimingCut.h \
   TowerBackground.h \
   TowerBackgroundv1.h \
@@ -83,6 +85,7 @@ libjetbackground_la_SOURCES = \
   BeamBackgroundFilterAndQA.cc \
   CopyAndSubtractJets.cc \
   DetermineTowerBackground.cc \
+  DetermineTowerBackgroundv2.cc \
   DetermineEventRho.cc \
   DetermineTowerRho.cc \
   FastJetAlgoSub.cc \
@@ -92,6 +95,7 @@ libjetbackground_la_SOURCES = \
   StreakSidebandFilter.cc \
   SubtractTowers.cc \
   SubtractTowersCS.cc \
+  SubtractTowersRho.cc \
   TimingCut.cc
 
 # Rule for generating table CINT dictionaries.
