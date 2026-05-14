@@ -98,9 +98,9 @@ int CopyAndSubtractJets::process_event(PHCompositeNode *topNode)
   TowerBackground *background;
   if (m_use_towerinfo)
   {
-    unsub_jets = findNode::getClass<JetContainer>(topNode, "AntiKt_TowerInfo_HIRecoSeedsRaw_r02");
-    sub_jets = findNode::getClass<JetContainer>(topNode, "AntiKt_TowerInfo_HIRecoSeedsSub_r02");
-    background = findNode::getClass<TowerBackground>(topNode, "TowerInfoBackground_Sub1");
+    unsub_jets = findNode::getClass<JetContainer>(topNode, m_rawseed_node);
+    sub_jets = findNode::getClass<JetContainer>(topNode, m_subseed_node);
+    background = findNode::getClass<TowerBackground>(topNode, m_background_node);
   }
   else
   {
@@ -305,14 +305,14 @@ int CopyAndSubtractJets::CreateNode(PHCompositeNode *topNode)
   }
 
   // Looking for the ANTIKT node
-  PHCompositeNode *antiktNode = dynamic_cast<PHCompositeNode *>(iter.findFirst("PHCompositeNode", "ANTIKT"));
+  PHCompositeNode *antiktNode = dynamic_cast<PHCompositeNode *>(iter.findFirst("PHCompositeNode", m_jet_node));
   if (!antiktNode)
   {
     std::cout << PHWHERE << "ANTIKT node not found, doing nothing." << std::endl;
   }
 
   // Looking for the TOWER node
-  PHCompositeNode *towerNode = dynamic_cast<PHCompositeNode *>(iter.findFirst("PHCompositeNode", "TOWER"));
+  PHCompositeNode *towerNode = dynamic_cast<PHCompositeNode *>(iter.findFirst("PHCompositeNode", m_input_node));
   if (!towerNode)
   {
     std::cout << PHWHERE << "TOWER node not found, doing nothing." << std::endl;
@@ -322,7 +322,7 @@ int CopyAndSubtractJets::CreateNode(PHCompositeNode *topNode)
   JetContainer *test_jets;
   if (m_use_towerinfo)
   {
-    test_jets = findNode::getClass<JetContainer>(topNode, "AntiKt_TowerInfo_HIRecoSeedsSub_r02");
+    test_jets = findNode::getClass<JetContainer>(topNode, m_subseed_node);
   }
   else
   {
@@ -338,7 +338,7 @@ int CopyAndSubtractJets::CreateNode(PHCompositeNode *topNode)
       {
         std::cout << "CopyAndSubtractJets::CreateNode : creating AntiKt_TowerInfo_HIRecoSeedsSub_r02 node " << std::endl;
       }
-      subjetNode = new PHIODataNode<PHObject>(sub_jets, "AntiKt_TowerInfo_HIRecoSeedsSub_r02", "PHObject");
+      subjetNode = new PHIODataNode<PHObject>(sub_jets, m_subseed_node, "PHObject");
     }
     else
     {

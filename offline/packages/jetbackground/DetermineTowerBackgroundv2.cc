@@ -184,6 +184,7 @@ RawTowerGeomContainer * DetermineTowerBackgroundv2::LoadTowerGeomContainer(PHCom
   return tg;
 }
 
+
 int DetermineTowerBackgroundv2::fill_energy_vectors(PHCompositeNode *topNode, Jet::SRC src)
 {
 
@@ -1103,7 +1104,7 @@ int DetermineTowerBackgroundv2::process_event(PHCompositeNode *topNode)
     std::cout << "]" << std::endl;
   }
     
-  FillNode(topNode);
+  FillNode( topNode , m_background_node );
 
   if ( Verbosity() > 0 )
   {
@@ -1151,14 +1152,15 @@ int DetermineTowerBackgroundv2::CreateNode(PHCompositeNode *topNode)
   return Fun4AllReturnCodes::EVENT_OK;
 }
 
-void DetermineTowerBackgroundv2::FillNode(PHCompositeNode *topNode)
+void DetermineTowerBackgroundv2::FillNode(PHCompositeNode *topNode , const std::string & name)
 {
-  auto * towerbackground = findNode::getClass<TowerBackground>(topNode, m_background_node);
+  auto * towerbackground = findNode::getClass<TowerBackground>(topNode, name);
   if (!towerbackground)
   {
     std::cout << " ERROR -- can't find TowerBackground node after it should have been created" << std::endl;
     return;
   }
+
   towerbackground->set_UE(0, m_ue_density.at(0) );
   towerbackground->set_UE(1, m_ue_density.at(1) );
   towerbackground->set_UE(2, m_ue_density.at(2) );

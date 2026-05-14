@@ -60,7 +60,7 @@ class DetermineTowerBackgroundv2 : public SubsysReco
  private:
 
   int CreateNode(PHCompositeNode *topNode);
-  void FillNode(PHCompositeNode *topNode);
+  void FillNode(PHCompositeNode *topNode, const std::string &name);
   TowerInfoContainer * LoadTowerInfoContainer(PHCompositeNode *topNode, const std::string &name);
   RawTowerGeomContainer * LoadTowerGeomContainer(PHCompositeNode *topNode, const std::string &name);
   int get_zvrtx(PHCompositeNode *topNode);
@@ -83,7 +83,6 @@ class DetermineTowerBackgroundv2 : public SubsysReco
 
   std::vector<float> m_cent_avg_v2 {};
 
-    
   bool m_is_flow_failure = false;
   float m_v2    = 0;
   float m_psi2  = 0;
