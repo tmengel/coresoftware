@@ -54,6 +54,11 @@ class DetermineTowerBackground : public SubsysReco
     m_towerNodePrefix = prefix;
     return;
   }
+  void set_jetnode(const std::string &jetnode)
+  {
+    m_jetnode = jetnode;
+    return;
+  }
 
  private:
 
@@ -114,6 +119,8 @@ class DetermineTowerBackground : public SubsysReco
   bool _reweight_failed{false};
 
   std::string m_towerNodePrefix{"TOWERINFO_CALIB"};
+  std::string m_jetnode{"AntiKt_TowerInfo_HIRecoSeedsRaw_r02"};
+
   std::string EMTowerName;
   std::string IHTowerName;
   std::string OHTowerName;

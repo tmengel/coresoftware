@@ -50,6 +50,7 @@ int SubtractTowersRho::grab_zvrtx( PHCompositeNode *topNode )
   {
     std::cout << "SubtractTowersRho::grab_zvrtx - starting grab_zvrtx with m_vertex_type = " << m_vertex_type << std::endl;
   }
+  
 
   m_vtxz = 0;  // default to 0
   auto vertexmap = findNode::getClass< GlobalVertexMap >( topNode, "GlobalVertexMap" );

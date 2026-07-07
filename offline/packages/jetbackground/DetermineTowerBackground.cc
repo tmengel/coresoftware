@@ -225,10 +225,10 @@ int DetermineTowerBackground::process_event(PHCompositeNode *topNode)
   // seed type 0 is D > 3 R=0.2 jets run on retowerized CEMC
   if (_seed_type == 0)
   {
-    auto * reco2_jets = findNode::getClass<JetContainer>(topNode, "AntiKt_TowerInfo_HIRecoSeedsRaw_r02");
+    auto * reco2_jets = findNode::getClass<JetContainer>(topNode, m_jetnode);
     if (!reco2_jets)
     {
-      std::cout << "DetermineTowerBackground::process_event: Cannot find AntiKt_TowerInfo_HIRecoSeedsRaw_r02, exiting" << std::endl;
+      std::cout << "DetermineTowerBackground::process_event: Cannot find " << m_jetnode << " node, exiting" << std::endl;
       exit(1);
     }
     if (Verbosity() > 1)
@@ -244,7 +244,7 @@ int DetermineTowerBackground::process_event(PHCompositeNode *topNode)
       float this_phi = this_jet->get_phi();
       float this_eta = this_jet->get_eta();
 
-      if (this_jet->get_pt() < 5)
+      if (this_jet->get_pt() < _seed_jet_pt)
       {
         // mark that this jet was not selected as a seed (and did not have D determined)
         this_jet->set_property(_index_SeedD, 0);
@@ -396,11 +396,10 @@ int DetermineTowerBackground::process_event(PHCompositeNode *topNode)
   // pT > 20 GeV
   if (_seed_type == 1)
   {
-    auto * reco2_jets = findNode::getClass<JetContainer>(topNode, "AntiKt_TowerInfo_HIRecoSeedsSub_r02");
+    auto * reco2_jets = findNode::getClass<JetContainer>(topNode, m_jetnode);
     if (!reco2_jets)
     {
-      std::cout << "DetermineTowerBackground::process_event: Cannot find AntiKt_TowerInfo_HIRecoSeedsSub_r02, exiting" << std::endl;
-      exit(1);
+      std::cout << "DetermineTowerBackground::process_event: Cannot find " << m_jetnode << " node, exiting" << std::endl;
     }
     if (Verbosity() > 1)
     {

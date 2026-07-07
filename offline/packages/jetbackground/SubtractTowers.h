@@ -41,6 +41,12 @@ class SubtractTowers : public SubsysReco
     m_towerNodePrefix = prefix;
     return;
   }
+  
+  void set_iter2_background(const std::string &background_name)
+  {
+    m_iter2_background = background_name;
+    return;
+  }
 
  private:
   int CreateNode(PHCompositeNode *topNode);
@@ -51,6 +57,8 @@ class SubtractTowers : public SubsysReco
   std::string EMTowerName;
   std::string IHTowerName;
   std::string OHTowerName;
+  std::string m_iter2_background{"TowerBackground_Sub2"};
+
 };
 
 #endif

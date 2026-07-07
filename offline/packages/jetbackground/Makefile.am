@@ -46,6 +46,7 @@ pkginclude_HEADERS = \
   DetermineTowerBackground.h \
   DetermineTowerBackgroundv1.h \
   DetermineTowerBackgroundv2.h \
+  DetermineSeedlessTowerBackground.h \
   DetermineEventRho.h \
   DetermineTowerRho.h \
   EventRho.h \
@@ -88,6 +89,7 @@ libjetbackground_la_SOURCES = \
   DetermineTowerBackground.cc \
   DetermineTowerBackgroundv1.cc \
   DetermineTowerBackgroundv2.cc \
+  DetermineSeedlessTowerBackground.cc \
   DetermineEventRho.cc \
   DetermineTowerRho.cc \
   FastJetAlgoSub.cc \
