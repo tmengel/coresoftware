@@ -436,7 +436,7 @@ void PHActsTrkFitter::loopTracks(Acts::Logging::Level logLevel)
       SourceLinkVec sourceLinks;
 
       MakeSourceLinks makeSourceLinks;
-      makeSourceLinks.initialize(_tpccellgeo);
+      makeSourceLinks.initialize(_tpccellgeo, m_tGeometry);
       makeSourceLinks.setVerbosity(Verbosity());
       makeSourceLinks.set_pp_mode(m_pp_mode);
       makeSourceLinks.set_cluster_edge_rejection(m_cluster_edge_rejection);
@@ -525,11 +525,11 @@ void PHActsTrkFitter::loopTracks(Acts::Logging::Level logLevel)
 
       // position comes from the silicon seed, unless there is no silicon seed
       Acts::Vector3 position(0, 0, 0);
-      if (siseed)
+      if (siseed && !m_ignoreSilicon)
       {
         position = TrackSeedHelper::get_xyz(siseed) * Acts::UnitConstants::cm;
       }
-      if (!siseed || !is_valid(position) || m_ignoreSilicon)
+      if (!siseed || !is_valid(position) || m_forceTpcOnlyFit)
       {
         position = TrackSeedHelper::get_xyz(tpcseed) * Acts::UnitConstants::cm;
       }
@@ -573,6 +573,13 @@ void PHActsTrkFitter::loopTracks(Acts::Logging::Level logLevel)
               continue;
             }
           }
+          //else if (m_forceTpcOnlyFit)
+          //{
+          //  if (surface_apr->geometryId().volume() < 14)
+          //  {
+          //    continue;
+          //  }
+          //}
           bool pop_flag = false;
           if (surface_apr->geometryId().approach() == 1)
           {
@@ -642,7 +649,7 @@ void PHActsTrkFitter::loopTracks(Acts::Logging::Level logLevel)
       float seedphi = 0;
       float seedtheta = 0;
       float seedeta = 0;
-      if (siseed)
+      if (siseed && !m_forceTpcOnlyFit)
       {
         seedphi = siseed->get_phi();
         seedtheta = siseed->get_theta();
@@ -980,6 +987,9 @@ SourceLinkVec PHActsTrkFitter::filterSourceLinks(const SourceLinkVec& sourceLink
     if (m_forceSiOnlyFit && (m_tGeometry->maps().isMicromegasSurface(surf) || m_tGeometry->maps().isTpcSurface(surf)) )
     { continue; }
 
+    if (m_forceTpcOnlyFit && (m_tGeometry->maps().isMicromegasSurface(surf) || m_tGeometry->maps().isSiSurface(surf)) )
+    { continue; }
+
     // update vectors
     filtered.push_back(sl);
   }
@@ -995,6 +1005,7 @@ SurfacePtrVec PHActsTrkFitter::getSurfaceVector(const SourceLinkVec& sourceLinks
   {
     const ActsSourceLink asl = sl.get<ActsSourceLink>();
     const auto* const surf = m_tGeometry->geometry().tGeometry->findSurface(asl.geometryId());
+    //   std::cout << "sl: " <<  surf->geometryId() << std::endl;
     surfaces.push_back(surf);
   }
 
@@ -1003,25 +1014,32 @@ SurfacePtrVec PHActsTrkFitter::getSurfaceVector(const SourceLinkVec& sourceLinks
 
 void PHActsTrkFitter::checkSurfaceVec(SurfacePtrVec& surfaces) const
 {
+  // Do not assume volume id has the correct layer, check the surface radius
+
   for (unsigned int i = 0; i < surfaces.size() - 1; i++)
   {
     const auto& surface = surfaces.at(i);
     const auto thisVolume = surface->geometryId().volume();
-    const auto thisLayer = surface->geometryId().layer();
 
-    const auto nextSurface = surfaces.at(i + 1);
+    const Acts::Vector3 this_center = surface->center(m_tGeometry->geometry().getGeoContext());
+    double thisRadius = sqrt(this_center.x()*this_center.x()+this_center.y()*this_center.y());
+    
+    const auto* nextSurface = surfaces.at(i + 1);
     const auto nextVolume = nextSurface->geometryId().volume();
-    const auto nextLayer = nextSurface->geometryId().layer();
 
+    const Acts::Vector3 next_center = surface->center(m_tGeometry->geometry().getGeoContext());
+    double nextRadius = sqrt(next_center.x()*next_center.x()+next_center.y()*next_center.y());
+    
     /// Implement a check to ensure surfaces are sorted
     if (nextVolume == thisVolume)
     {
-      if (nextLayer < thisLayer)
+      //    if (nextLayer < thisLayer)
+      if (nextRadius < thisRadius)
       {
         std::cout
             << "PHActsTrkFitter::checkSurfaceVec - "
             << "Surface not in order... removing surface"
-            << surface->geometryId() << std::endl;
+            << surface->geometryId() << " with radius " << thisRadius << std::endl;
 
         surfaces.erase(surfaces.begin() + i);
 
@@ -1066,7 +1084,7 @@ void PHActsTrkFitter::updateSvtxTrack(
     track->identify();
   }
 
-  if (!m_fitSiliconMMs && !m_forceSiOnlyFit)
+  if (!m_fitSiliconMMs && !m_forceSiOnlyFit && !m_forceTpcOnlyFit)
   {
     track->clear_states();
   }
@@ -1093,9 +1111,20 @@ void PHActsTrkFitter::updateSvtxTrack(
   track->set_y(params.position(m_transient_geocontext)(1) / Acts::UnitConstants::cm);
   track->set_z(params.position(m_transient_geocontext)(2) / Acts::UnitConstants::cm);
 
-  track->set_px(params.momentum()(0));
-  track->set_py(params.momentum()(1));
-  track->set_pz(params.momentum()(2));
+  auto* seed = track->get_tpc_seed();
+  
+  if(!m_forceSiOnlyFit)
+  {
+    track->set_px(params.momentum()(0));
+    track->set_py(params.momentum()(1));
+    track->set_pz(params.momentum()(2));
+  }
+  else
+  {
+    track->set_px(seed->get_px());
+    track->set_py(seed->get_py());
+    track->set_pz(seed->get_pz());
+  }
 
   track->set_charge(params.charge());
   track->set_chisq(trajState.chi2Sum);
@@ -1130,7 +1159,7 @@ void PHActsTrkFitter::updateSvtxTrack(
 
   // in using silicon mm fit also extrapolate track parameters to all TPC surfaces with clusters
   // get all tpc clusters
-  auto* seed = track->get_tpc_seed();
+  
   if (m_fitSiliconMMs && seed)
   {
     // acts propagator
