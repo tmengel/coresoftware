@@ -1,4 +1,6 @@
 #include "DetermineSeedlessTowerBackground.h"
+#include "TowerRhov1.h"
+
 
 #include <jetbackground/TowerBackground.h>
 #include <jetbackground/TowerBackgroundv1.h>
@@ -27,6 +29,11 @@
 #include <fun4all/Fun4AllReturnCodes.h>
 #include <fun4all/SubsysReco.h>
 
+#include <mbd/MbdOutV2.h>
+
+#include <globalvertex/GlobalVertex.h>
+#include <globalvertex/GlobalVertexMapv1.h>
+
 #include <phool/PHCompositeNode.h>
 #include <phool/PHIODataNode.h>
 #include <phool/PHNode.h>
@@ -36,6 +43,9 @@
 #include <phool/phool.h>
 
 #include <TLorentzVector.h>
+
+#include <TFile.h>
+#include <TTree.h>
 
 // standard includes
 #include <algorithm>
@@ -52,229 +62,268 @@ DetermineSeedlessTowerBackground::DetermineSeedlessTowerBackground(const std::st
   : SubsysReco(name)
 {
   _UE.resize(3, std::vector<float>(1, 0));
+  memset(m_parameters, 0, sizeof(m_parameters));
 }
 
 int DetermineSeedlessTowerBackground::InitRun(PHCompositeNode *topNode)
 {
 
-  // probably this should go in a calibration method 
+  // probably this should go in a calibration method
+  auto * fin = new TFile( m_ue_directpath.c_str() , "READ" );
+  if ( !fin || fin -> IsZombie() )
+  {
+    std::cerr << "Error: Could not open input file: " << m_ue_directpath << std::endl;
+    return Fun4AllReturnCodes::ABORTRUN;
+  }
+  auto * ttree = dynamic_cast<TTree*>( fin -> Get( "T" ) );
+  if ( !ttree )
+  {
+    std::cerr << "Error: Could not find TTree 'T' in input file: " << m_ue_directpath << std::endl;
+    fin -> Close();
+    return Fun4AllReturnCodes::ABORTRUN;
+  }
+  ttree -> SetBranchAddress( "FITVALS", m_parameters );
+  ttree -> GetEntry( 0 );
+  if ( Verbosity() > 1 )
+  {
+    std::cout << "AverageESub::InitRun: loaded UE parameters from " << m_ue_directpath << std::endl;
+  } 
+  if ( Verbosity() > 2 )
+  {
+    for ( int iz = 0; iz < 10; ++iz )
+    {
+      for ( int ilay = 0; ilay < 3; ++ilay )
+      {
+        for ( int ieta = 0; ieta < 24; ++ieta )
+        {
+          std::cout << "AverageESub::InitRun: FITVALS[" << iz << "][" << ilay << "][" << ieta << "] = "
+                    << m_parameters[iz][ilay][ieta][0] << ", "
+                    << m_parameters[iz][ilay][ieta][1] << ", "
+                    << m_parameters[iz][ilay][ieta][2] << std::endl;
+        }
+      }
+    }
+  }
+  fin -> Close();
+  delete fin;
+ 
 
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 0 ][ 0 ] = 0.2120965196;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 0 ][ 1 ] = 0.05031564211;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 0 ][ 2 ] = -1.113034585e-06;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 1 ][ 0 ] = 0.1817338304;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 1 ][ 1 ] = 0.0472055138;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 1 ][ 2 ] = -6.132067527e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 2 ][ 0 ] = 0.1736861722;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 2 ][ 1 ] = 0.04495695851;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 2 ][ 2 ] = -2.48724152e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 3 ][ 0 ] = 0.1837111248;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 3 ][ 1 ] = 0.04301007009;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 3 ][ 2 ] = 1.186183463e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 4 ][ 0 ] = 0.1799415174;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 4 ][ 1 ] = 0.04127921522;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 4 ][ 2 ] = 3.55174846e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 5 ][ 0 ] = 0.1546017354;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 5 ][ 1 ] = 0.03902324678;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 5 ][ 2 ] = 5.973436416e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 6 ][ 0 ] = 0.1319221946;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 6 ][ 1 ] = 0.03772326526;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 6 ][ 2 ] = 7.004122164e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 7 ][ 0 ] = 0.1128588244;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 7 ][ 1 ] = 0.03607995457;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 7 ][ 2 ] = 8.010000448e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 8 ][ 0 ] = 0.1265889922;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 8 ][ 1 ] = 0.03423885831;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 8 ][ 2 ] = 9.535080443e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 9 ][ 0 ] = 0.1130356916;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 9 ][ 1 ] = 0.03350577856;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 9 ][ 2 ] = 9.921697356e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 10 ][ 0 ] = 0.08728665167;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 10 ][ 1 ] = 0.03396326782;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 10 ][ 2 ] = 9.975970952e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 11 ][ 0 ] = 0.1091489055;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 11 ][ 1 ] = 0.03302033224;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 11 ][ 2 ] = 1.104297145e-06;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 12 ][ 0 ] = 0.104515202;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 12 ][ 1 ] = 0.03374247946;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 12 ][ 2 ] = 1.129639623e-06;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 13 ][ 0 ] = 0.08991978446;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 13 ][ 1 ] = 0.03447238522;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 13 ][ 2 ] = 1.106562314e-06;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 14 ][ 0 ] = 0.1125588615;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 14 ][ 1 ] = 0.03349849942;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 14 ][ 2 ] = 1.063508117e-06;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 15 ][ 0 ] = 0.1415612047;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 15 ][ 1 ] = 0.03380469268;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 15 ][ 2 ] = 1.050287122e-06;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 16 ][ 0 ] = 0.1207641481;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 16 ][ 1 ] = 0.03462512453;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 16 ][ 2 ] = 8.715866025e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 17 ][ 0 ] = 0.1459010516;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 17 ][ 1 ] = 0.03558933523;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 17 ][ 2 ] = 7.97888879e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 18 ][ 0 ] = 0.1725986651;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 18 ][ 1 ] = 0.03727176344;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 18 ][ 2 ] = 7.256919699e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 19 ][ 0 ] = 0.1919291268;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 19 ][ 1 ] = 0.03942669162;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 19 ][ 2 ] = 5.528969804e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 20 ][ 0 ] = 0.2030374424;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 20 ][ 1 ] = 0.04082207905;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 20 ][ 2 ] = 3.831317392e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 21 ][ 0 ] = 0.1691248798;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 21 ][ 1 ] = 0.04307476882;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 21 ][ 2 ] = -7.419568831e-08;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 22 ][ 0 ] = 0.1410257131;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 22 ][ 1 ] = 0.04615530662;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 22 ][ 2 ] = -4.879195626e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 23 ][ 0 ] = 0.1153054715;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 23 ][ 1 ] = 0.05032899584;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 23 ][ 2 ] = -9.595323109e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 0 ][ 0 ] = 0.1977771725;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 0 ][ 1 ] = 0.005918793556;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 0 ][ 2 ] = -7.259353269e-09;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 1 ][ 0 ] = 0.2208571546;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 1 ][ 1 ] = 0.003175225483;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 1 ][ 2 ] = 3.975835829e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 2 ][ 0 ] = 0.2161655328;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 2 ][ 1 ] = 0.002982590709;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 2 ][ 2 ] = 4.626212925e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 3 ][ 0 ] = 0.218479975;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 3 ][ 1 ] = 0.002557665388;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 3 ][ 2 ] = 4.946929979e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 4 ][ 0 ] = 0.2184736923;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 4 ][ 1 ] = 0.002230489696;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 4 ][ 2 ] = 5.098212872e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 5 ][ 0 ] = 0.2254862045;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 5 ][ 1 ] = 0.001944753547;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 5 ][ 2 ] = 5.209088531e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 6 ][ 0 ] = 0.224122218;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 6 ][ 1 ] = 0.001719860659;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 6 ][ 2 ] = 5.058672332e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 7 ][ 0 ] = 0.2271340041;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 7 ][ 1 ] = 0.001554593673;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 7 ][ 2 ] = 5.013579076e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 8 ][ 0 ] = 0.2288534658;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 8 ][ 1 ] = 0.00137120559;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 8 ][ 2 ] = 4.779423453e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 9 ][ 0 ] = 0.2276760881;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 9 ][ 1 ] = 0.001207441324;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 9 ][ 2 ] = 4.474249892e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 10 ][ 0 ] = 0.2236360497;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 10 ][ 1 ] = 0.001236441242;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 10 ][ 2 ] = 4.436846871e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 11 ][ 0 ] = 0.2287048618;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 11 ][ 1 ] = 0.001209408447;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 11 ][ 2 ] = 4.514057368e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 12 ][ 0 ] = 0.2283755648;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 12 ][ 1 ] = 0.001207903426;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 12 ][ 2 ] = 4.500283304e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 13 ][ 0 ] = 0.2233407769;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 13 ][ 1 ] = 0.001235190051;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 13 ][ 2 ] = 4.409357624e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 14 ][ 0 ] = 0.2272496812;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 14 ][ 1 ] = 0.001205374311;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 14 ][ 2 ] = 4.411122806e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 15 ][ 0 ] = 0.2281299548;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 15 ][ 1 ] = 0.00136635695;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 15 ][ 2 ] = 4.710385051e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 16 ][ 0 ] = 0.2288353895;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 16 ][ 1 ] = 0.001555709026;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 16 ][ 2 ] = 4.934539211e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 17 ][ 0 ] = 0.2266255838;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 17 ][ 1 ] = 0.001714542677;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 17 ][ 2 ] = 5.031838854e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 18 ][ 0 ] = 0.2268472562;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 18 ][ 1 ] = 0.001938627877;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 18 ][ 2 ] = 5.151298258e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 19 ][ 0 ] = 0.2199272726;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 19 ][ 1 ] = 0.002218715122;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 19 ][ 2 ] = 4.996123591e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 20 ][ 0 ] = 0.2184220561;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 20 ][ 1 ] = 0.002517138474;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 20 ][ 2 ] = 4.915608206e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 21 ][ 0 ] = 0.2166350649;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 21 ][ 1 ] = 0.002935611121;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 21 ][ 2 ] = 4.6219667e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 22 ][ 0 ] = 0.2206710453;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 22 ][ 1 ] = 0.003137362329;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 22 ][ 2 ] = 3.830413492e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 23 ][ 0 ] = 0.198504869;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 23 ][ 1 ] = 0.005713949191;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 23 ][ 2 ] = 1.057068586e-08;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 0 ][ 0 ] = 0.1464578278;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 0 ][ 1 ] = 0.02535797864;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 0 ][ 2 ] = -1.563768599e-06;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 1 ][ 0 ] = 0.1065649392;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 1 ][ 1 ] = 0.008761897524;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 1 ][ 2 ] = -3.57194577e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 2 ][ 0 ] = 0.100240904;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 2 ][ 1 ] = 0.00999668167;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 2 ][ 2 ] = -3.581594087e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 3 ][ 0 ] = 0.09576232891;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 3 ][ 1 ] = 0.007795809374;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 3 ][ 2 ] = -1.508583266e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 4 ][ 0 ] = 0.07285955413;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 4 ][ 1 ] = 0.008134762215;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 4 ][ 2 ] = 2.266406674e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 5 ][ 0 ] = 0.06576189358;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 5 ][ 1 ] = 0.006192823688;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 5 ][ 2 ] = 2.638589856e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 6 ][ 0 ] = 0.06618350589;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 6 ][ 1 ] = 0.005567834478;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 6 ][ 2 ] = 2.835233455e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 7 ][ 0 ] = 0.06117568515;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 7 ][ 1 ] = 0.00543203112;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 7 ][ 2 ] = 2.816557708e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 8 ][ 0 ] = 0.06011015376;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 8 ][ 1 ] = 0.0050126664;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 8 ][ 2 ] = 2.558503702e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 9 ][ 0 ] = 0.06744393651;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 9 ][ 1 ] = 0.004703943817;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 9 ][ 2 ] = 2.754483032e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 10 ][ 0 ] = 0.06388098862;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 10 ][ 1 ] = 0.004864377698;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 10 ][ 2 ] = 2.860649967e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 11 ][ 0 ] = 0.0658736226;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 11 ][ 1 ] = 0.004821619679;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 11 ][ 2 ] = 2.948491528e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 12 ][ 0 ] = 0.06555143733;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 12 ][ 1 ] = 0.004825562404;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 12 ][ 2 ] = 2.886793527e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 13 ][ 0 ] = 0.06720369769;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 13 ][ 1 ] = 0.004858058152;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 13 ][ 2 ] = 2.775937661e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 14 ][ 0 ] = 0.06877584293;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 14 ][ 1 ] = 0.004734190352;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 14 ][ 2 ] = 2.534302938e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 15 ][ 0 ] = 0.06356673181;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 15 ][ 1 ] = 0.005059240744;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 15 ][ 2 ] = 2.363434666e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 16 ][ 0 ] = 0.07405824355;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 16 ][ 1 ] = 0.005606746235;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 16 ][ 2 ] = 2.44604726e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 17 ][ 0 ] = 0.0791229347;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 17 ][ 1 ] = 0.005842182651;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 17 ][ 2 ] = 2.262605975e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 18 ][ 0 ] = 0.07646442502;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 18 ][ 1 ] = 0.006518746884;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 18 ][ 2 ] = 1.428283131e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 19 ][ 0 ] = 0.08810613024;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 19 ][ 1 ] = 0.008209039681;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 19 ][ 2 ] = 3.835134755e-08;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 20 ][ 0 ] = 0.09833221924;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 20 ][ 1 ] = 0.007951396113;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 20 ][ 2 ] = -1.804688501e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 21 ][ 0 ] = 0.105225752;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 21 ][ 1 ] = 0.01006848423;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 21 ][ 2 ] = -4.29247696e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 22 ][ 0 ] = 0.1135659493;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 22 ][ 1 ] = 0.009154409329;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 22 ][ 2 ] = -4.481355404e-07;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 23 ][ 0 ] = 0.1857438289;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 23 ][ 1 ] = 0.02782668769;
-  _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 23 ][ 2 ] = -2.413541556e-06;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 0 ][ 0 ] = 0.2120965196;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 0 ][ 1 ] = 0.05031564211;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 0 ][ 2 ] = -1.113034585e-06;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 1 ][ 0 ] = 0.1817338304;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 1 ][ 1 ] = 0.0472055138;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 1 ][ 2 ] = -6.132067527e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 2 ][ 0 ] = 0.1736861722;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 2 ][ 1 ] = 0.04495695851;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 2 ][ 2 ] = -2.48724152e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 3 ][ 0 ] = 0.1837111248;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 3 ][ 1 ] = 0.04301007009;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 3 ][ 2 ] = 1.186183463e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 4 ][ 0 ] = 0.1799415174;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 4 ][ 1 ] = 0.04127921522;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 4 ][ 2 ] = 3.55174846e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 5 ][ 0 ] = 0.1546017354;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 5 ][ 1 ] = 0.03902324678;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 5 ][ 2 ] = 5.973436416e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 6 ][ 0 ] = 0.1319221946;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 6 ][ 1 ] = 0.03772326526;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 6 ][ 2 ] = 7.004122164e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 7 ][ 0 ] = 0.1128588244;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 7 ][ 1 ] = 0.03607995457;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 7 ][ 2 ] = 8.010000448e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 8 ][ 0 ] = 0.1265889922;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 8 ][ 1 ] = 0.03423885831;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 8 ][ 2 ] = 9.535080443e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 9 ][ 0 ] = 0.1130356916;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 9 ][ 1 ] = 0.03350577856;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 9 ][ 2 ] = 9.921697356e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 10 ][ 0 ] = 0.08728665167;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 10 ][ 1 ] = 0.03396326782;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 10 ][ 2 ] = 9.975970952e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 11 ][ 0 ] = 0.1091489055;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 11 ][ 1 ] = 0.03302033224;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 11 ][ 2 ] = 1.104297145e-06;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 12 ][ 0 ] = 0.104515202;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 12 ][ 1 ] = 0.03374247946;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 12 ][ 2 ] = 1.129639623e-06;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 13 ][ 0 ] = 0.08991978446;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 13 ][ 1 ] = 0.03447238522;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 13 ][ 2 ] = 1.106562314e-06;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 14 ][ 0 ] = 0.1125588615;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 14 ][ 1 ] = 0.03349849942;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 14 ][ 2 ] = 1.063508117e-06;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 15 ][ 0 ] = 0.1415612047;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 15 ][ 1 ] = 0.03380469268;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 15 ][ 2 ] = 1.050287122e-06;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 16 ][ 0 ] = 0.1207641481;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 16 ][ 1 ] = 0.03462512453;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 16 ][ 2 ] = 8.715866025e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 17 ][ 0 ] = 0.1459010516;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 17 ][ 1 ] = 0.03558933523;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 17 ][ 2 ] = 7.97888879e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 18 ][ 0 ] = 0.1725986651;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 18 ][ 1 ] = 0.03727176344;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 18 ][ 2 ] = 7.256919699e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 19 ][ 0 ] = 0.1919291268;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 19 ][ 1 ] = 0.03942669162;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 19 ][ 2 ] = 5.528969804e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 20 ][ 0 ] = 0.2030374424;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 20 ][ 1 ] = 0.04082207905;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 20 ][ 2 ] = 3.831317392e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 21 ][ 0 ] = 0.1691248798;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 21 ][ 1 ] = 0.04307476882;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 21 ][ 2 ] = -7.419568831e-08;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 22 ][ 0 ] = 0.1410257131;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 22 ][ 1 ] = 0.04615530662;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 22 ][ 2 ] = -4.879195626e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 23 ][ 0 ] = 0.1153054715;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 23 ][ 1 ] = 0.05032899584;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 23 ][ 2 ] = -9.595323109e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 0 ][ 0 ] = 0.1977771725;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 0 ][ 1 ] = 0.005918793556;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 0 ][ 2 ] = -7.259353269e-09;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 1 ][ 0 ] = 0.2208571546;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 1 ][ 1 ] = 0.003175225483;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 1 ][ 2 ] = 3.975835829e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 2 ][ 0 ] = 0.2161655328;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 2 ][ 1 ] = 0.002982590709;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 2 ][ 2 ] = 4.626212925e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 3 ][ 0 ] = 0.218479975;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 3 ][ 1 ] = 0.002557665388;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 3 ][ 2 ] = 4.946929979e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 4 ][ 0 ] = 0.2184736923;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 4 ][ 1 ] = 0.002230489696;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 4 ][ 2 ] = 5.098212872e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 5 ][ 0 ] = 0.2254862045;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 5 ][ 1 ] = 0.001944753547;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 5 ][ 2 ] = 5.209088531e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 6 ][ 0 ] = 0.224122218;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 6 ][ 1 ] = 0.001719860659;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 6 ][ 2 ] = 5.058672332e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 7 ][ 0 ] = 0.2271340041;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 7 ][ 1 ] = 0.001554593673;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 7 ][ 2 ] = 5.013579076e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 8 ][ 0 ] = 0.2288534658;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 8 ][ 1 ] = 0.00137120559;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 8 ][ 2 ] = 4.779423453e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 9 ][ 0 ] = 0.2276760881;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 9 ][ 1 ] = 0.001207441324;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 9 ][ 2 ] = 4.474249892e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 10 ][ 0 ] = 0.2236360497;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 10 ][ 1 ] = 0.001236441242;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 10 ][ 2 ] = 4.436846871e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 11 ][ 0 ] = 0.2287048618;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 11 ][ 1 ] = 0.001209408447;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 11 ][ 2 ] = 4.514057368e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 12 ][ 0 ] = 0.2283755648;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 12 ][ 1 ] = 0.001207903426;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 12 ][ 2 ] = 4.500283304e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 13 ][ 0 ] = 0.2233407769;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 13 ][ 1 ] = 0.001235190051;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 13 ][ 2 ] = 4.409357624e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 14 ][ 0 ] = 0.2272496812;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 14 ][ 1 ] = 0.001205374311;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 14 ][ 2 ] = 4.411122806e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 15 ][ 0 ] = 0.2281299548;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 15 ][ 1 ] = 0.00136635695;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 15 ][ 2 ] = 4.710385051e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 16 ][ 0 ] = 0.2288353895;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 16 ][ 1 ] = 0.001555709026;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 16 ][ 2 ] = 4.934539211e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 17 ][ 0 ] = 0.2266255838;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 17 ][ 1 ] = 0.001714542677;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 17 ][ 2 ] = 5.031838854e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 18 ][ 0 ] = 0.2268472562;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 18 ][ 1 ] = 0.001938627877;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 18 ][ 2 ] = 5.151298258e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 19 ][ 0 ] = 0.2199272726;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 19 ][ 1 ] = 0.002218715122;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 19 ][ 2 ] = 4.996123591e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 20 ][ 0 ] = 0.2184220561;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 20 ][ 1 ] = 0.002517138474;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 20 ][ 2 ] = 4.915608206e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 21 ][ 0 ] = 0.2166350649;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 21 ][ 1 ] = 0.002935611121;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 21 ][ 2 ] = 4.6219667e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 22 ][ 0 ] = 0.2206710453;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 22 ][ 1 ] = 0.003137362329;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 22 ][ 2 ] = 3.830413492e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 23 ][ 0 ] = 0.198504869;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 23 ][ 1 ] = 0.005713949191;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 1 ][ 23 ][ 2 ] = 1.057068586e-08;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 0 ][ 0 ] = 0.1464578278;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 0 ][ 1 ] = 0.02535797864;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 0 ][ 2 ] = -1.563768599e-06;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 1 ][ 0 ] = 0.1065649392;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 1 ][ 1 ] = 0.008761897524;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 1 ][ 2 ] = -3.57194577e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 2 ][ 0 ] = 0.100240904;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 2 ][ 1 ] = 0.00999668167;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 2 ][ 2 ] = -3.581594087e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 3 ][ 0 ] = 0.09576232891;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 3 ][ 1 ] = 0.007795809374;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 3 ][ 2 ] = -1.508583266e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 4 ][ 0 ] = 0.07285955413;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 4 ][ 1 ] = 0.008134762215;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 4 ][ 2 ] = 2.266406674e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 5 ][ 0 ] = 0.06576189358;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 5 ][ 1 ] = 0.006192823688;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 5 ][ 2 ] = 2.638589856e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 6 ][ 0 ] = 0.06618350589;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 6 ][ 1 ] = 0.005567834478;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 6 ][ 2 ] = 2.835233455e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 7 ][ 0 ] = 0.06117568515;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 7 ][ 1 ] = 0.00543203112;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 7 ][ 2 ] = 2.816557708e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 8 ][ 0 ] = 0.06011015376;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 8 ][ 1 ] = 0.0050126664;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 8 ][ 2 ] = 2.558503702e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 9 ][ 0 ] = 0.06744393651;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 9 ][ 1 ] = 0.004703943817;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 9 ][ 2 ] = 2.754483032e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 10 ][ 0 ] = 0.06388098862;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 10 ][ 1 ] = 0.004864377698;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 10 ][ 2 ] = 2.860649967e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 11 ][ 0 ] = 0.0658736226;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 11 ][ 1 ] = 0.004821619679;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 11 ][ 2 ] = 2.948491528e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 12 ][ 0 ] = 0.06555143733;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 12 ][ 1 ] = 0.004825562404;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 12 ][ 2 ] = 2.886793527e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 13 ][ 0 ] = 0.06720369769;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 13 ][ 1 ] = 0.004858058152;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 13 ][ 2 ] = 2.775937661e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 14 ][ 0 ] = 0.06877584293;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 14 ][ 1 ] = 0.004734190352;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 14 ][ 2 ] = 2.534302938e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 15 ][ 0 ] = 0.06356673181;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 15 ][ 1 ] = 0.005059240744;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 15 ][ 2 ] = 2.363434666e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 16 ][ 0 ] = 0.07405824355;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 16 ][ 1 ] = 0.005606746235;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 16 ][ 2 ] = 2.44604726e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 17 ][ 0 ] = 0.0791229347;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 17 ][ 1 ] = 0.005842182651;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 17 ][ 2 ] = 2.262605975e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 18 ][ 0 ] = 0.07646442502;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 18 ][ 1 ] = 0.006518746884;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 18 ][ 2 ] = 1.428283131e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 19 ][ 0 ] = 0.08810613024;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 19 ][ 1 ] = 0.008209039681;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 19 ][ 2 ] = 3.835134755e-08;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 20 ][ 0 ] = 0.09833221924;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 20 ][ 1 ] = 0.007951396113;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 20 ][ 2 ] = -1.804688501e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 21 ][ 0 ] = 0.105225752;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 21 ][ 1 ] = 0.01006848423;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 21 ][ 2 ] = -4.29247696e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 22 ][ 0 ] = 0.1135659493;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 22 ][ 1 ] = 0.009154409329;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 22 ][ 2 ] = -4.481355404e-07;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 23 ][ 0 ] = 0.1857438289;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 23 ][ 1 ] = 0.02782668769;
+  // _seedless_UE_parameters_LAYER_ETA_PARAM[ 2 ][ 23 ][ 2 ] = -2.413541556e-06;
 
   // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 0 ][ 0 ] = 0.0410237;
   // _seedless_UE_parameters_LAYER_ETA_PARAM[ 0 ][ 0 ][ 1 ] = 0.0607689;
@@ -497,17 +546,20 @@ int DetermineSeedlessTowerBackground::InitRun(PHCompositeNode *topNode)
   return CreateNode(topNode);
 }
 
-float DetermineSeedlessTowerBackground::get_UE_estimate( int layer, int eta , float layer_sumet ) {
-
-  float p0 = _seedless_UE_parameters_LAYER_ETA_PARAM[ layer ][ eta ][ 0 ];
-  float p1 = _seedless_UE_parameters_LAYER_ETA_PARAM[ layer ][ eta ][ 1 ];
-  float p2 = _seedless_UE_parameters_LAYER_ETA_PARAM[ layer ][ eta ][ 2 ];
+float DetermineSeedlessTowerBackground::get_UE_estimate( int iz, int layer, int eta, float mbdQ_sum )
+{
+  // float p0 = _seedless_UE_parameters_LAYER_ETA_PARAM[ layer ][ eta ][ 0 ];
+  // float p1 = _seedless_UE_parameters_LAYER_ETA_PARAM[ layer ][ eta ][ 1 ];
+  // float p2 = _seedless_UE_parameters_LAYER_ETA_PARAM[ layer ][ eta ][ 2 ];
+  float p0 = m_parameters[iz][layer][eta][0];
+  float p1 = m_parameters[iz][layer][eta][1];
+  float p2 = m_parameters[iz][layer][eta][2];
 
   // note: no checks on good bounds for layer_sumet
-  float estimate = p0 + p1 * layer_sumet + p2 * pow( layer_sumet , 2 );
+  float estimate = p0 + p1 * mbdQ_sum + p2 * pow( mbdQ_sum , 2 );
   
   if ( Verbosity() >= 10 ) {
-    std::cout << "DetermineSeedlessTowerBackground::get_UE_estimate called on layer / eta = " << layer << " / " << eta << " with SumET = " << layer_sumet << ", returning " << estimate << std::endl;    
+    std::cout << "DetermineSeedlessTowerBackground::get_UE_estimate called on layer / eta = " << layer << " / " << eta << " with mbdQ_sum = " << mbdQ_sum << " and parameters p0, p1, p2 = " << p0 << ", " << p1 << ", " << p2 << " giving estimate = " << estimate << std::endl;
   }
 
   return estimate;
@@ -523,6 +575,90 @@ int DetermineSeedlessTowerBackground::process_event(PHCompositeNode *topNode)
     std::cout << "DetermineSeedlessTowerBackground::process_event: start" << std::endl;
   }
 
+  double m_zvtx = 0;
+  double sum_mbdQ = 0;
+
+  GlobalVertex * vtx { nullptr };
+  auto * vertexmap = findNode::getClass<GlobalVertexMap>( topNode, "GlobalVertexMap" );
+  if ( !vertexmap  ) 
+  {
+    std::cout << PHWHERE << "GlobalVertexMap node missing, skipping event." << std::endl;
+    return Fun4AllReturnCodes::ABORTRUN;
+  }
+  if ( vertexmap->empty() ) 
+  {
+    std::cout << PHWHERE << "GlobalVertexMap is empty, skipping event." << std::endl;
+  }
+
+  auto vertices = vertexmap -> get_gvtxs_with_type( { GlobalVertex::MBD } );
+  if( !vertices.empty() )
+  {
+    vtx = vertices.at(0);
+  }
+  else 
+  {
+    vtx = vertexmap->begin()->second;
+  }
+    
+  if ( vtx )
+  {
+    m_zvtx = vtx->get_z();
+  }
+    
+  if ( std::isnan(m_zvtx) || std::abs(m_zvtx) > 1e3 )
+  {
+    static bool z_warning_once = true;
+    if ( z_warning_once )
+    {
+        z_warning_once = false;
+        std::cout << PHWHERE << " vertex z is " << m_zvtx << ", skipping event (further warnings will be suppressed)." << std::endl;
+    }
+    m_zvtx  = 0;      
+  }
+
+  if ( Verbosity() > 1 ) 
+  {
+      std::cout << PHWHERE << " - zvtx = " << m_zvtx << std::endl;
+  }
+
+  if ( !m_overlay_node.empty() ) 
+  { 
+
+    auto * overlayinfo = findNode::getClass<TowerRhov1>( topNode, m_overlay_node );
+    if ( !overlayinfo ) 
+    {
+        std::cout << PHWHERE << " Input node " << m_overlay_node << " Node missing, doing nothing." << std::endl;
+        return Fun4AllReturnCodes::ABORTRUN;
+    }
+    
+    auto m_overlay_zvrtx = overlayinfo -> get_sigma();
+    auto m_overlay_mbd = overlayinfo -> get_rho();
+    if ( Verbosity() > 1 ) 
+    {
+      std::cout << PHWHERE << " - overlay_zvrtx = " << m_overlay_zvrtx << std::endl;
+      std::cout << PHWHERE << " - overlay_mbd_q_N = " << m_overlay_mbd << std::endl;
+    }
+
+    sum_mbdQ += m_overlay_mbd;
+    m_zvtx = m_overlay_zvrtx;
+
+  }
+  
+  auto * mbd_node = findNode::getClass< MbdOutV2 >( topNode, "MbdOut" );
+  if ( !mbd_node ) 
+  {
+    std::cout << PHWHERE << "MbdOut node missing, skipping event." << std::endl;
+    return Fun4AllReturnCodes::ABORTRUN;
+  }
+  // sum_mbdQ = mbd_node -> get_q(0) + mbd_node -> get_q(1);
+  sum_mbdQ+= mbd_node -> get_q(0);
+  sum_mbdQ+= mbd_node -> get_q(1);
+  if ( Verbosity() > 1 ) 
+  {
+    std::cout << PHWHERE << " - sum_mbdQ = " << sum_mbdQ << std::endl;
+  }
+
+  int z_bin = get_zbin(  m_zvtx );
   
   // pull out the tower containers and geometry objects at the start
   EMTowerName = m_towerNodePrefix + "_CEMC_RETOWER";
@@ -551,44 +687,16 @@ int DetermineSeedlessTowerBackground::process_event(PHCompositeNode *topNode)
   _UE.assign(3, std::vector<float>(24, 0));
 
   // determine total SumET
-   
-  _layer_sumet[0] = 0;
-  for (long unsigned int ch = 0; ch < towerinfosEM3->size(); ch++)
-    {
-      _layer_sumet[0] += towerinfosEM3->get_tower_at_channel( ch )->get_energy();
-    }
-  _layer_sumet[1] = 0;
-  for (long unsigned int ch = 0; ch < towerinfosIH3->size(); ch++)
-    {
-      _layer_sumet[1] += towerinfosIH3->get_tower_at_channel( ch )->get_energy();
-    }
-  _layer_sumet[2] = 0;
-  for (long unsigned int ch = 0; ch < towerinfosOH3->size(); ch++)
-    {
-      _layer_sumet[2] += towerinfosOH3->get_tower_at_channel( ch )->get_energy();
-    }
-
-  if ( Verbosity() >= 1 ) {
-    std::cout << "DetermineSeedlessTowerBackground::process_event layer SumET = " << _layer_sumet[0] << " / " << _layer_sumet[1] << " / " << _layer_sumet[2] << std::endl;
-  }
-  
-  // fill UE vectors
-
   for (int layer = 0; layer < 3; layer++) {
-    for (int eta = 0; eta < 24; eta++) {
-      
-      float UE_estimate = get_UE_estimate( layer, eta , _layer_sumet[ layer ] );
-
+    for (int eta = 0; eta < 24; eta++) {      
+      float UE_estimate = get_UE_estimate( z_bin, layer, eta, sum_mbdQ );
       // note: may need some special casing here for, e.g., eta region with fully disabled towers
-      UE_estimate /= 64.0;
-      
       _UE[layer][eta] = UE_estimate ;
     }
   }
   
   // that's it! 
 
-  // end main code
   
   if (Verbosity() > 0)
   {
