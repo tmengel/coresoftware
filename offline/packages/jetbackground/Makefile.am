@@ -55,6 +55,7 @@ pkginclude_HEADERS = \
   StreakSidebandFilter.h \
   SubtractTowers.h \
   SubtractTowersCS.h \
+  SubtractTowersRho.h \
   TimingCut.h \
   TowerBackground.h \
   TowerBackgroundv1.h \
@@ -92,6 +93,7 @@ libjetbackground_la_SOURCES = \
   StreakSidebandFilter.cc \
   SubtractTowers.cc \
   SubtractTowersCS.cc \
+  SubtractTowersRho.cc \
   TimingCut.cc
 
 # Rule for generating table CINT dictionaries.
