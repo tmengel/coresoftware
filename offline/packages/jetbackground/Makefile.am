@@ -44,6 +44,7 @@ pkginclude_HEADERS = \
   BaseBeamBackgroundFilter.h \
   CopyAndSubtractJets.h \
   DetermineTowerBackground.h \
+  DetermineTowerBackgroundv1.h \
   DetermineEventRho.h \
   DetermineTowerRho.h \
   EventRho.h \
@@ -84,6 +85,7 @@ libjetbackground_la_SOURCES = \
   BeamBackgroundFilterAndQA.cc \
   CopyAndSubtractJets.cc \
   DetermineTowerBackground.cc \
+  DetermineTowerBackgroundv1.cc \
   DetermineEventRho.cc \
   DetermineTowerRho.cc \
   FastJetAlgoSub.cc \
