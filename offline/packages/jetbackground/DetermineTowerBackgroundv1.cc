@@ -1087,6 +1087,9 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
   // flow mask if !exclude full eta && !do_reweight : all towers in eta strips with bad towers + all seed exclusion towers
 
   // set energy density averages
+  std::vector<int> n_emcal_towers_eta(m_num_eta_ihcal, 0);
+  std::vector<int> n_ihcal_towers_eta(m_num_eta_ihcal, 0);
+  std::vector<int> n_ohcal_towers_eta(m_num_eta_ihcal, 0);
   for (int ieta = 0; ieta < m_num_eta_ihcal; ieta++ )
   {
     float avg_emcal_energy = 0.0;
@@ -1096,7 +1099,7 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
     int n_ihcal_towers = 0;
     int n_ohcal_towers = 0;
     for ( int iphi = 0; iphi < m_num_phi_ihcal; iphi++ )
-    { 
+    {
       if ( !m_emcal_mask[ieta][iphi] )
       {
         avg_emcal_energy += m_emcal_energy[ieta][iphi];
@@ -1134,25 +1137,35 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
     m_ue_density.at(0).at(ieta) = avg_emcal_energy;
     m_ue_density.at(1).at(ieta) = avg_ihcal_energy;
     m_ue_density.at(2).at(ieta) = avg_ohcal_energy;
+
+    n_emcal_towers_eta.at(ieta) = n_emcal_towers;
+    n_ihcal_towers_eta.at(ieta) = n_ihcal_towers;
+    n_ohcal_towers_eta.at(ieta) = n_ohcal_towers;
   }
 
+  // average the per-eta-strip averages into a single detector-wide average, used below to
+  // normalize the eta-dependent shape of the UE relative to rho. An eta strip is included
+  // here whenever it had at least one unmasked tower, regardless of whether its average energy
+  // came out positive or negative (calibrated, pedestal-subtracted tower energies routinely
+  // fluctuate slightly negative in low-occupancy events, so filtering on sign discarded valid
+  // strips and could zero out the denominator entirely, producing +/-inf below).
   float avg_avg_emcal_energy = 0.0;
   float avg_avg_ihcal_energy = 0.0;
   float avg_avg_ohcal_energy = 0.0;
   int n_eta_emcal = 0, n_eta_ihcal = 0, n_eta_ohcal = 0;
   for (int ieta = 0; ieta < m_num_eta_ihcal; ieta++ )
   {
-    if ( m_ue_density.at(0).at(ieta) > 0 )
+    if ( n_emcal_towers_eta.at(ieta) > 0 )
     {
       avg_avg_emcal_energy += m_ue_density.at(0).at(ieta);
       n_eta_emcal++;
     }
-    if ( m_ue_density.at(1).at(ieta) > 0 )
+    if ( n_ihcal_towers_eta.at(ieta) > 0 )
     {
       avg_avg_ihcal_energy += m_ue_density.at(1).at(ieta);
       n_eta_ihcal++;
     }
-    if ( m_ue_density.at(2).at(ieta) > 0 )
+    if ( n_ohcal_towers_eta.at(ieta) > 0 )
     {
       avg_avg_ohcal_energy += m_ue_density.at(2).at(ieta);
       n_eta_ohcal++;
@@ -1344,10 +1357,12 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
     double ue_emcal_rho = rho_emcal * cosh( m_emcal_tower_eta.at(ieta) );
     double ue_ihcal_rho = rho_ihcal * cosh( m_ihcal_tower_eta.at(ieta) );
     double ue_ohcal_rho = rho_ohcal * cosh( m_ohcal_tower_eta.at(ieta) );
-    
-    m_ue_density.at(0).at(ieta) = ue_emcal_rho*(ue_emcal/avg_avg_emcal_energy);
-    m_ue_density.at(1).at(ieta) = ue_ihcal_rho*(ue_ihcal/avg_avg_ihcal_energy);
-    m_ue_density.at(2).at(ieta) = ue_ohcal_rho*(ue_ohcal/avg_avg_ohcal_energy);
+
+    // guard against a zero (or vanishingly small) detector-wide average, which would otherwise
+    // send this ratio to +/-inf; fall back to the flat, unmodulated rho*cosh(eta) profile
+    m_ue_density.at(0).at(ieta) = ( avg_avg_emcal_energy != 0.0 ) ? ue_emcal_rho * ( ue_emcal / avg_avg_emcal_energy ) : ue_emcal_rho;
+    m_ue_density.at(1).at(ieta) = ( avg_avg_ihcal_energy != 0.0 ) ? ue_ihcal_rho * ( ue_ihcal / avg_avg_ihcal_energy ) : ue_ihcal_rho;
+    m_ue_density.at(2).at(ieta) = ( avg_avg_ohcal_energy != 0.0 ) ? ue_ohcal_rho * ( ue_ohcal / avg_avg_ohcal_energy ) : ue_ohcal_rho;
   }
 
 
