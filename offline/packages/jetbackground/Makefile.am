@@ -57,6 +57,7 @@ pkginclude_HEADERS = \
   SubtractTowers.h \
   SubtractTowersCS.h \
   SubtractTowersRho.h \
+  SubtractTowersRhov1.h \
   TimingCut.h \
   TowerBackground.h \
   TowerBackgroundv1.h \
@@ -96,6 +97,7 @@ libjetbackground_la_SOURCES = \
   SubtractTowers.cc \
   SubtractTowersCS.cc \
   SubtractTowersRho.cc \
+  SubtractTowersRhov1.cc \
   TimingCut.cc
 
 # Rule for generating table CINT dictionaries.

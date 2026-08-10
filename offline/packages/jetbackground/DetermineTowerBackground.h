@@ -46,12 +46,17 @@ class DetermineTowerBackground : public SubsysReco
   void SetSeedJetD(float D) { _seed_jet_D = D; };
   void SetSeedJetPt(float pt) { _seed_jet_pt = pt; };
   void SetSeedMaxConst(float max_const) { _seed_max_const = max_const; };
-
+  void SetSeedExclusionDR(float dr) { _seed_exclusion_DR = dr; };
   void UseReweighting(bool do_reweight ) {  _do_reweight = do_reweight; }
 
   void set_towerNodePrefix(const std::string &prefix)
   {
     m_towerNodePrefix = prefix;
+    return;
+  }
+  void set_jetnode(const std::string &jetnode)
+  {
+    m_jetnode = jetnode;
     return;
   }
 
@@ -102,6 +107,7 @@ class DetermineTowerBackground : public SubsysReco
   float _seed_jet_D{4.0};
   float _seed_max_const{3.0};
   float _seed_jet_pt{7.0};
+  float _seed_exclusion_DR{0.4};
 
   std::vector<float> _seed_eta;
   std::vector<float> _seed_phi;
@@ -113,6 +119,8 @@ class DetermineTowerBackground : public SubsysReco
   bool _reweight_failed{false};
 
   std::string m_towerNodePrefix{"TOWERINFO_CALIB"};
+  std::string m_jetnode{"AntiKt_TowerInfo_HIRecoSeedsRaw_r02"};
+
   std::string EMTowerName;
   std::string IHTowerName;
   std::string OHTowerName;

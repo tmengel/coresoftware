@@ -704,6 +704,16 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
   // if m_n_omit_seeds < 0 then default to accepting seeds above a given threshold
   // threshold could be D, Dmax, pT (seed = 0), or pT (seed = 1)
   std::vector< std::pair< size_t , double > > seed_val_pairs {};
+
+  TowerInfoContainer * ihcal_towerinfos = LoadTowerInfoContainer(topNode, m_ihcal_towerinfo_node);
+  TowerInfoContainer * ohcal_towerinfos = LoadTowerInfoContainer(topNode, m_ohcal_towerinfo_node);
+  TowerInfoContainer * cemc_towerinfos  = LoadTowerInfoContainer(topNode, m_cemc_towerinfo_node);
+  TowerInfoContainer * cemc_retowerinfos  = LoadTowerInfoContainer(topNode, m_cemc_retowerinfo_node);
+
+  RawTowerGeomContainer * ihcal_towergeom = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+  RawTowerGeomContainer * ohcal_towergeom = LoadTowerGeomContainer(topNode, m_ohcal_geom_node);
+  RawTowerGeomContainer * cemc_towergeom  = LoadTowerGeomContainer(topNode, m_cemc_geom_node);
+
   for ( size_t i = 0; i < ktjets -> size(); i++ )
   {
 
@@ -729,29 +739,37 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
       m_caloid = RawTowerDefs::CalorimeterId::NONE;
       if ( comp.first == Jet::SRC::HCALIN_TOWERINFO )
       {
-        m_towerinfos = LoadTowerInfoContainer(topNode, m_ihcal_towerinfo_node);
-        m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+        // m_towerinfos = LoadTowerInfoContainer(topNode, m_ihcal_towerinfo_node);
+        // m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+        m_towerinfos = ihcal_towerinfos;
+        m_towergeom  = ihcal_towergeom;
         m_caloid     = RawTowerDefs::CalorimeterId::HCALIN;
         tower_r     = m_ihcal_r;
       }
       if ( comp.first == Jet::SRC::HCALOUT_TOWERINFO )
       {
-        m_towerinfos  = LoadTowerInfoContainer(topNode, m_ohcal_towerinfo_node);
-        m_towergeom   = LoadTowerGeomContainer(topNode, m_ohcal_geom_node);
+        // m_towerinfos  = LoadTowerInfoContainer(topNode, m_ohcal_towerinfo_node);
+        // m_towergeom   = LoadTowerGeomContainer(topNode, m_ohcal_geom_node);
+        m_towerinfos  = ohcal_towerinfos;
+        m_towergeom   = ohcal_towergeom;
         m_caloid      = RawTowerDefs::CalorimeterId::HCALOUT;
         tower_r       = m_ohcal_r;
       }
       if ( comp.first == Jet::SRC::CEMC_TOWERINFO_RETOWER  )
       {
-        m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_retowerinfo_node);
-        m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+        m_towerinfos = cemc_retowerinfos;
+        m_towergeom  = ihcal_towergeom;
+        // m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_retowerinfo_node);
+        // m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
         m_caloid     = RawTowerDefs::CalorimeterId::HCALIN;
         tower_r      = m_emcal_r;
       }
       if ( comp.first == Jet::SRC::CEMC_TOWERINFO  )
       {
-        m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_towerinfo_node);
-        m_towergeom  = LoadTowerGeomContainer(topNode, m_cemc_geom_node);
+        // m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_towerinfo_node);
+        // m_towergeom  = LoadTowerGeomContainer(topNode, m_cemc_geom_node);
+        m_towerinfos = cemc_towerinfos;
+        m_towergeom  = cemc_towergeom;
         m_caloid     = RawTowerDefs::CalorimeterId::CEMC;
         tower_r      = m_emcal_r;
       }
@@ -876,26 +894,34 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
 
       if ( comp.first == Jet::SRC::HCALIN_TOWERINFO )
       {
-        m_towerinfos = LoadTowerInfoContainer(topNode, m_ihcal_towerinfo_node);
-        m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+        // m_towerinfos = LoadTowerInfoContainer(topNode, m_ihcal_towerinfo_node);
+        // m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+        m_towerinfos = ihcal_towerinfos;
+        m_towergeom  = ihcal_towergeom;
         m_caloid     = RawTowerDefs::CalorimeterId::HCALIN;
       }
       if ( comp.first == Jet::SRC::HCALOUT_TOWERINFO )
       {
-        m_towerinfos  = LoadTowerInfoContainer(topNode, m_ohcal_towerinfo_node);
-        m_towergeom   = LoadTowerGeomContainer(topNode, m_ohcal_geom_node);
+        // m_towerinfos  = LoadTowerInfoContainer(topNode, m_ohcal_towerinfo_node);
+        // m_towergeom   = LoadTowerGeomContainer(topNode, m_ohcal_geom_node);
+        m_towerinfos  = ohcal_towerinfos;
+        m_towergeom   = ohcal_towergeom;
         m_caloid      = RawTowerDefs::CalorimeterId::HCALOUT;
       }
       if ( comp.first == Jet::SRC::CEMC_TOWERINFO_RETOWER  )
       {
-        m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_retowerinfo_node);
-        m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+        // m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_retowerinfo_node);
+        // m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+        m_towerinfos = cemc_retowerinfos;
+        m_towergeom  = ihcal_towergeom;
         m_caloid     = RawTowerDefs::CalorimeterId::HCALIN;
       }
       if ( comp.first == Jet::SRC::CEMC_TOWERINFO  )
       {
-        m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_towerinfo_node);
-        m_towergeom  = LoadTowerGeomContainer(topNode, m_cemc_geom_node);
+        // m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_towerinfo_node);
+        // m_towergeom  = LoadTowerGeomContainer(topNode, m_cemc_geom_node);
+        m_towerinfos = cemc_towerinfos;
+        m_towergeom  = cemc_towergeom;
         m_caloid     = RawTowerDefs::CalorimeterId::CEMC;
       }
     
@@ -980,26 +1006,34 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
     m_caloid = RawTowerDefs::CalorimeterId::NONE;
     if ( src == Jet::SRC::HCALIN_TOWERINFO )
     {
-      m_towerinfos = LoadTowerInfoContainer(topNode, m_ihcal_towerinfo_node);
-      m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+      // m_towerinfos = LoadTowerInfoContainer(topNode, m_ihcal_towerinfo_node);
+      // m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+      m_towerinfos = ihcal_towerinfos;
+      m_towergeom  = ihcal_towergeom;
       m_caloid     = RawTowerDefs::CalorimeterId::HCALIN;
     }
     else if ( src == Jet::SRC::HCALOUT_TOWERINFO )
     {
-      m_towerinfos  = LoadTowerInfoContainer(topNode, m_ohcal_towerinfo_node);
-      m_towergeom   = LoadTowerGeomContainer(topNode, m_ohcal_geom_node);
+      // m_towerinfos  = LoadTowerInfoContainer(topNode, m_ohcal_towerinfo_node);
+      // m_towergeom   = LoadTowerGeomContainer(topNode, m_ohcal_geom_node);
+      m_towerinfos  = ohcal_towerinfos;
+      m_towergeom   = ohcal_towergeom;
       m_caloid      = RawTowerDefs::CalorimeterId::HCALOUT;
     }
     else if ( src == Jet::SRC::CEMC_TOWERINFO_RETOWER  )
     {
-      m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_retowerinfo_node);
-      m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+      // m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_retowerinfo_node);
+      // m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
+      m_towerinfos = cemc_retowerinfos;
+      m_towergeom  = ihcal_towergeom;
       m_caloid     = RawTowerDefs::CalorimeterId::HCALIN;
     }
     else if ( src == Jet::SRC::CEMC_TOWERINFO  )
     {
-      m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_towerinfo_node);
-      m_towergeom  = LoadTowerGeomContainer(topNode, m_cemc_geom_node);
+      // m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_towerinfo_node);
+      // m_towergeom  = LoadTowerGeomContainer(topNode, m_cemc_geom_node);
+      m_towerinfos = cemc_towerinfos;
+      m_towergeom  = cemc_towergeom;
       m_caloid     = RawTowerDefs::CalorimeterId::CEMC;
     }
     

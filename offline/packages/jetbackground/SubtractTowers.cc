@@ -132,7 +132,7 @@ int SubtractTowers::process_event(PHCompositeNode *topNode)
   TowerBackground *towerbackground;
   if (m_use_towerinfo)
   {
-    towerbackground = findNode::getClass<TowerBackground>(topNode, "TowerInfoBackground_Sub2");
+    towerbackground = findNode::getClass<TowerBackground>(topNode, m_towerBackgroundNode);
   }
   else
   {

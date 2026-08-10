@@ -44,6 +44,29 @@ class CopyAndSubtractJets : public SubsysReco
     return;
   }
 
+  void set_rawseed_node(const std::string &name) { m_rawseed_node = name; }
+  void set_subseed_node(const std::string &name) { m_subseed_node = name; }
+  void set_background_node(const std::string &name) { m_background_node = name; }
+  void set_jet_node(const std::string &name) { m_jet_node = name; }
+  void set_input_node(const std::string &name) { m_input_node = name; }
+
+  // backward compatibility
+  void set_iter1_background(const std::string &background_name)
+  {
+    m_background_node = background_name;
+    return;
+  }
+  void set_rawseednode(const std::string &rawseednode)
+  {
+    m_rawseed_node = rawseednode;
+    return;
+  }
+  void set_subseednode(const std::string &subseednode)
+  {
+    m_subseed_node = subseednode;
+    return;
+  }
+
  private:
   int CreateNode(PHCompositeNode *topNode);
 
@@ -53,6 +76,12 @@ class CopyAndSubtractJets : public SubsysReco
   std::string EMTowerName;
   std::string IHTowerName;
   std::string OHTowerName;
+
+  std::string m_rawseed_node = "AntiKt_TowerInfo_HIRecoSeedsRaw_r02";
+  std::string m_subseed_node = "AntiKt_TowerInfo_HIRecoSeedsSub_r02";
+  std::string m_background_node = "TowerInfoBackground_Sub1";
+  std::string m_jet_node = "ANTIKT";
+  std::string m_input_node = "TOWER";
 };
 
 #endif
