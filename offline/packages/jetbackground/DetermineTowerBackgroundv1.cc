@@ -1560,9 +1560,19 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
 
     // guard against a zero (or vanishingly small) detector-wide average, which would otherwise
     // send this ratio to +/-inf; fall back to the flat, unmodulated rho*cosh(eta) profile
-    m_ue_density.at(0).at(ieta) = ( avg_avg_emcal_energy != 0.0 ) ? ue_emcal_rho * ( ue_emcal / avg_avg_emcal_energy ) : ue_emcal_rho;
-    m_ue_density.at(1).at(ieta) = ( avg_avg_ihcal_energy != 0.0 ) ? ue_ihcal_rho * ( ue_ihcal / avg_avg_ihcal_energy ) : ue_ihcal_rho;
-    m_ue_density.at(2).at(ieta) = ( avg_avg_ohcal_energy != 0.0 ) ? ue_ohcal_rho * ( ue_ohcal / avg_avg_ohcal_energy ) : ue_ohcal_rho;
+    // default to event by event if w = 1
+    if (get_etaWeight(0,ieta) == 1.0)
+    {
+      m_ue_density.at(0).at(ieta) = ( avg_avg_emcal_energy != 0.0 ) ? ue_emcal_rho * ( ue_emcal / avg_avg_emcal_energy ) : ue_emcal_rho;
+    }
+    if (get_etaWeight(1,ieta) == 1.0)
+    {
+      m_ue_density.at(1).at(ieta) = ( avg_avg_ihcal_energy != 0.0 ) ? ue_ihcal_rho * ( ue_ihcal / avg_avg_ihcal_energy ) : ue_ihcal_rho;
+    }
+    if (get_etaWeight(2,ieta) == 1.0)
+    {
+      m_ue_density.at(2).at(ieta) = ( avg_avg_ohcal_energy != 0.0 ) ? ue_ohcal_rho * ( ue_ohcal / avg_avg_ohcal_energy ) : ue_ohcal_rho;
+    }
   }
 
 
