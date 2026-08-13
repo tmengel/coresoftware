@@ -18,6 +18,7 @@ class PHCompositeNode;
 class TowerBackground;
 class TowerInfoContainer;
 class RawTowerGeomContainer;
+class CDBTTree;
 
 class GlobalVertex;
 
@@ -29,7 +30,7 @@ class DetermineTowerBackgroundv1 : public SubsysReco
   enum Psi2Mode { NoPsi2 = 0, Calo = 1, Truth = 2, sEPD = 3 };
 
   DetermineTowerBackgroundv1(const std::string &name = "DetermineTowerBackgroundv1");
-  ~DetermineTowerBackgroundv1() override {}
+  ~DetermineTowerBackgroundv1() override;
 
   int InitRun(PHCompositeNode *topNode) override;
   int process_event(PHCompositeNode *topNode) override;
@@ -66,9 +67,21 @@ class DetermineTowerBackgroundv1 : public SubsysReco
   void SetOHCAL_TowerInfoNode(const std::string &name) { m_ohcal_towerinfo_node = name; }
   void SetCEMC_TowerInfoNode(const std::string &name) { m_cemc_towerinfo_node = name; }
   void SetCEMC_RetowerInfoNode(const std::string &name) { m_cemc_retowerinfo_node = name; }
-  void SetCEMC_RhoNode(const std::string &name) { m_cemc_rho_node = name; } 
+  void SetCEMC_RhoNode(const std::string &name) { m_cemc_rho_node = name; }
   void SetIHCAL_RhoNode(const std::string &name) { m_ihcal_rho_node = name; }
   void SetOHCAL_RhoNode(const std::string &name) { m_ohcal_rho_node = name; }
+
+  /// Point directly at a rho eta-shape calibration file on disk (CDBTTree
+  /// format, as written by rho_calib/make_rho_calib.C) -- same calibration
+  /// machinery / file format as SubtractTowersRhov1.
+  void SetEtaCalib_DirectPath( const std::string & path ) { m_calib_direct_path = path; m_use_etaCalib = true; }
+
+  /// Resolve the calibration through CDBInterface using a CDB global tag name.
+  void SetEtaCalib_CdbTag( const std::string & tag ) { m_calib_cdb_tag = tag; m_use_etaCalib = true; }
+
+  /// Node name for the MBD raw charge sum used to index the eta-shape
+  /// calibration; only read from the node tree when a calibration is configured.
+  void SetMbdNode( const std::string & node ) { m_mbd_node = node; }
 
  private:
 
@@ -82,6 +95,15 @@ class DetermineTowerBackgroundv1 : public SubsysReco
   int get_v2(PHCompositeNode *topNode);
   int LoadCalibrations();
   int fill_energy_vectors(PHCompositeNode *topNode, Jet::SRC src);
+
+  int LoadEtaCalib();
+  int grab_mbdQ(PHCompositeNode *topNode);
+  float get_etaWeight(const int layer_index, const int ieta) const;
+  static int find_bin(const float val, const std::vector<float> &edges);
+  static int encode_channel(const int ieta, const int izbin, const int imbd, const int n_mbd_bins)
+  {
+    return izbin * (n_mbd_bins * m_calib_n_eta_expected) + imbd * m_calib_n_eta_expected + ieta;
+  }
 
   std::string m_background_node       = "TestTowerBackground";
   std::string m_seed_jet_name {""};
@@ -162,6 +184,22 @@ class DetermineTowerBackgroundv1 : public SubsysReco
   std::string m_cemc_rho_node         = "TowerRho_CEMC_MULT";
   std::string m_ihcal_rho_node        = "TowerRho_HCALIN_MULT";
   std::string m_ohcal_rho_node        = "TowerRho_HCALOUT_MULT";
+
+  // -- optional eta-shape calibration (same file format as SubtractTowersRhov1) --
+  bool m_use_etaCalib = false;
+  bool m_etaCalib_loaded = false;
+  std::string m_calib_direct_path = "/sphenix/user/tmengel/JetUESub-JSTG-TF03/calibrations/rho_plots_data/rho_eta_calib_cdb.root";
+  std::string m_calib_cdb_tag = "";
+  std::string m_mbd_node = "MbdOut";
+  float m_mbdQ = 0.0;
+
+  static constexpr int m_calib_n_eta_expected = 24;
+  CDBTTree * m_calib_tree = nullptr;
+  int m_calib_izbin = -1;
+  int m_calib_imbd = -1;
+  std::vector<float> m_calib_zvtx_edges {};
+  std::vector<float> m_calib_mbdQ_edges {};
+  static const std::vector<std::string> m_calib_layer_names;
 
 };
 

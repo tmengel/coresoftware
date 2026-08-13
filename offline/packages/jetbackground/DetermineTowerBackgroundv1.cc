@@ -24,6 +24,8 @@
 
 #include <centrality/CentralityInfo.h>
 
+#include <mbd/MbdOutV2.h>
+
 #include <ffamodules/CDBInterface.h>
 #include <cdbobjects/CDBTTree.h>
 
@@ -41,6 +43,8 @@
 #include <phool/getClass.h>
 #include <phool/phool.h>
 
+#include <TString.h>
+
 #include <cmath>
 #include <iostream>
 #include <algorithm>
@@ -51,9 +55,16 @@
 #include <string>
 #include <cassert>
 
+const std::vector<std::string> DetermineTowerBackgroundv1::m_calib_layer_names = {"w_cemc", "w_hcalin", "w_hcalout"};
+
 DetermineTowerBackgroundv1::DetermineTowerBackgroundv1(const std::string &name)
   : SubsysReco(name)
 {}
+
+DetermineTowerBackgroundv1::~DetermineTowerBackgroundv1()
+{
+  delete m_calib_tree;
+}
 
 int DetermineTowerBackgroundv1::InitRun(PHCompositeNode *topNode)
 {
@@ -70,9 +81,149 @@ int DetermineTowerBackgroundv1::InitRun(PHCompositeNode *topNode)
 	  }
 
   }
-  
+
+  auto etacalib_res = LoadEtaCalib();
+  if ( etacalib_res != Fun4AllReturnCodes::EVENT_OK )
+  {
+    return etacalib_res;
+  }
+
   std::cout << "USING LOCAL BUILD\n\n";
   return CreateNode(topNode);
+}
+
+int DetermineTowerBackgroundv1::find_bin( const float val, const std::vector<float> & edges )
+{
+  if ( edges.size() < 2 || std::isnan(val) || val < edges.front() || val >= edges.back() )
+  {
+    return -1;
+  }
+  // edges.size() is small (O(10-20)) -- linear search is fine
+  for ( size_t i = 0; i + 1 < edges.size(); ++i )
+  {
+    if ( val >= edges[i] && val < edges[i + 1] )
+    {
+      return static_cast<int>(i);
+    }
+  }
+  return -1;
+}
+
+int DetermineTowerBackgroundv1::LoadEtaCalib()
+{
+  if ( !m_use_etaCalib )
+  {
+    return Fun4AllReturnCodes::EVENT_OK;
+  }
+
+  std::string calibpath = m_calib_direct_path;
+  if ( calibpath.empty() && !m_calib_cdb_tag.empty() )
+  {
+    calibpath = CDBInterface::instance()->getUrl( m_calib_cdb_tag );
+  }
+
+  if ( calibpath.empty() )
+  {
+    std::cout << PHWHERE << "DetermineTowerBackgroundv1::LoadEtaCalib - no calibration path resolved "
+              << "(direct path and CDB tag both empty/unresolved). Falling back to flat rho "
+              << "(w === 1 everywhere)." << std::endl;
+    m_use_etaCalib = false;
+    return Fun4AllReturnCodes::EVENT_OK;
+  }
+
+  m_calib_tree = new CDBTTree( calibpath );
+  m_calib_tree->LoadCalibrations();
+
+  const int n_eta = m_calib_tree->GetSingleIntValue( "n_eta" );
+  const int n_z = m_calib_tree->GetSingleIntValue( "n_zvtx_bins" );
+  const int n_mbd = m_calib_tree->GetSingleIntValue( "n_mbdQ_bins" );
+  if ( n_eta != m_calib_n_eta_expected || n_z <= 0 || n_mbd <= 0 )
+  {
+    std::cout << PHWHERE << "DetermineTowerBackgroundv1::LoadEtaCalib - calibration file " << calibpath
+              << " looks invalid (n_eta=" << n_eta << ", n_zvtx_bins=" << n_z
+              << ", n_mbdQ_bins=" << n_mbd << "). Disabling eta-shape calibration." << std::endl;
+    delete m_calib_tree;
+    m_calib_tree = nullptr;
+    m_use_etaCalib = false;
+    return Fun4AllReturnCodes::EVENT_OK;
+  }
+
+  m_calib_zvtx_edges.resize( n_z + 1 );
+  for ( int i = 0; i <= n_z; ++i )
+  {
+    m_calib_zvtx_edges[i] = m_calib_tree->GetSingleFloatValue( Form( "zvtx_edge_%d", i ) );
+  }
+  m_calib_mbdQ_edges.resize( n_mbd + 1 );
+  for ( int i = 0; i <= n_mbd; ++i )
+  {
+    m_calib_mbdQ_edges[i] = m_calib_tree->GetSingleFloatValue( Form( "mbdQ_edge_%d", i ) );
+  }
+
+  m_etaCalib_loaded = true;
+  if ( Verbosity() > 0 )
+  {
+    std::cout << "DetermineTowerBackgroundv1::LoadEtaCalib - loaded eta-shape calibration from " << calibpath
+              << " (n_zvtx_bins=" << n_z << ", n_mbdQ_bins=" << n_mbd << ")" << std::endl;
+  }
+  return Fun4AllReturnCodes::EVENT_OK;
+}
+
+float DetermineTowerBackgroundv1::get_etaWeight( const int layer_index, const int ieta ) const
+{
+  if ( !m_use_etaCalib || !m_etaCalib_loaded || !m_calib_tree )
+  {
+    return 1.0f;
+  }
+  if ( layer_index < 0 || layer_index >= static_cast<int>(m_calib_layer_names.size()) )
+  {
+    return 1.0f;
+  }
+  if ( m_calib_izbin < 0 || m_calib_imbd < 0 )
+  {
+    return 1.0f;  // event's (zvertex,mbdQ) falls outside the calibrated range
+  }
+  if ( ieta < 0 || ieta >= m_calib_n_eta_expected )
+  {
+    return 1.0f;
+  }
+
+  const int n_mbd_bins = static_cast<int>(m_calib_mbdQ_edges.size()) - 1;
+  const int channel = encode_channel( ieta, m_calib_izbin, m_calib_imbd, n_mbd_bins );
+  const float w = m_calib_tree->GetFloatValue( channel, m_calib_layer_names.at( layer_index ) );
+  if ( !(w > 0) || std::isnan(w) )
+  {
+    return 1.0f;
+  }
+  return w;
+}
+
+int DetermineTowerBackgroundv1::grab_mbdQ( PHCompositeNode *topNode )
+{
+  m_mbdQ = 0;
+  auto * mbd_node = findNode::getClass<MbdOutV2>( topNode, m_mbd_node );
+  if ( !mbd_node )
+  {
+    static bool once = true;
+    if ( once )
+    {
+      once = false;
+      std::cout << PHWHERE << "DetermineTowerBackgroundv1::grab_mbdQ - WARNING - MBD node " << m_mbd_node
+                << " not found, continuing with mbdQ = 0 (further warnings will be suppressed)." << std::endl;
+    }
+    return Fun4AllReturnCodes::EVENT_OK;
+  }
+
+  m_mbdQ = mbd_node->get_q(0) + mbd_node->get_q(1);
+  if ( std::isnan(m_mbdQ) )
+  {
+    m_mbdQ = 0;
+  }
+
+  if (Verbosity() > 1)
+  {
+    std::cout << "DetermineTowerBackgroundv1::grab_mbdQ - finished grab_mbdQ with m_mbdQ = " << m_mbdQ << std::endl;
+  }
+  return Fun4AllReturnCodes::EVENT_OK;
 }
 
 int DetermineTowerBackgroundv1::LoadCalibrations()
@@ -674,6 +825,21 @@ int DetermineTowerBackgroundv1::init_event(PHCompositeNode *topNode)
   m_caloid = RawTowerDefs::CalorimeterId::NONE;
 
   get_zvrtx(topNode);
+
+  // resolve the (zvertex,mbdQ) calibration bin once per event -- ieta-independent
+  m_calib_izbin = -1;
+  m_calib_imbd = -1;
+  if ( m_use_etaCalib && m_etaCalib_loaded )
+  {
+    grab_mbdQ( topNode );
+    m_calib_izbin = find_bin( m_vtxz, m_calib_zvtx_edges );
+    m_calib_imbd = find_bin( m_mbdQ, m_calib_mbdQ_edges );
+    if (Verbosity() > 1)
+    {
+      std::cout << "DetermineTowerBackgroundv1::init_event - eta-shape calibration bin: zvtx=" << m_vtxz
+                << " -> izbin=" << m_calib_izbin << ", mbdQ=" << m_mbdQ << " -> imbd=" << m_calib_imbd << std::endl;
+    }
+  }
 
   return Fun4AllReturnCodes::EVENT_OK;
 }
@@ -1388,9 +1554,9 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
     double ue_ihcal = m_ue_density.at(1).at(ieta);
     double ue_ohcal = m_ue_density.at(2).at(ieta);
 
-    double ue_emcal_rho = rho_emcal * cosh( m_emcal_tower_eta.at(ieta) );
-    double ue_ihcal_rho = rho_ihcal * cosh( m_ihcal_tower_eta.at(ieta) );
-    double ue_ohcal_rho = rho_ohcal * cosh( m_ohcal_tower_eta.at(ieta) );
+    double ue_emcal_rho = rho_emcal * cosh( m_emcal_tower_eta.at(ieta) ) * get_etaWeight( 0, ieta );
+    double ue_ihcal_rho = rho_ihcal * cosh( m_ihcal_tower_eta.at(ieta) ) * get_etaWeight( 1, ieta );
+    double ue_ohcal_rho = rho_ohcal * cosh( m_ohcal_tower_eta.at(ieta) ) * get_etaWeight( 2, ieta );
 
     // guard against a zero (or vanishingly small) detector-wide average, which would otherwise
     // send this ratio to +/-inf; fall back to the flat, unmodulated rho*cosh(eta) profile
