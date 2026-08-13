@@ -1558,6 +1558,9 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
     double ue_ihcal_rho = rho_ihcal * cosh( m_ihcal_tower_eta.at(ieta) ) * get_etaWeight( 1, ieta );
     double ue_ohcal_rho = rho_ohcal * cosh( m_ohcal_tower_eta.at(ieta) ) * get_etaWeight( 2, ieta );
 
+    m_ue_density.at(0).at(ieta) = ue_emcal_rho;
+    m_ue_density.at(1).at(ieta) = ue_ihcal_rho;
+    m_ue_density.at(2).at(ieta) = ue_ohcal_rho;
     // guard against a zero (or vanishingly small) detector-wide average, which would otherwise
     // send this ratio to +/-inf; fall back to the flat, unmodulated rho*cosh(eta) profile
     // default to event by event if w = 1
