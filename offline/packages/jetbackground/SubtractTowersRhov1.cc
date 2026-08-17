@@ -398,10 +398,11 @@ int SubtractTowersRhov1::process_event(PHCompositeNode *topNode)
       if ( m_rho_method == TowerRho::MULT )
       {
         double eT = raw_E / cosh(eta);
-        if ( eT > MULT_THRES_VAL * rho_val * w )
-        {
-          UE = 0;
-        }
+        // we  don't apply the multiplicity threshold for now, since it is not clear that it is needed for the current rho calculation.
+        // if ( eT > MULT_THRES_VAL * rho_val * w )
+        // {
+          // UE = 0;
+        // }
       }
       else if ( m_rho_method == TowerRho::AREA )
       {
