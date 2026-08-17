@@ -296,7 +296,8 @@ int SubtractTowersRhov1::process_event(PHCompositeNode *topNode)
   }
 
   auto rho_val = rho_node -> get_rho();
-  const double MULT_THRES_VAL = TMath::Sqrt(2 * 1.0 );
+  // const double MULT_THRES_VAL = TMath::Sqrt(2 * 1.0 );
+  const double MULT_THRES_VAL = 0.0;
   for ( const auto & target_node_name : m_targetTowerNodes )
   {
 
@@ -399,10 +400,11 @@ int SubtractTowersRhov1::process_event(PHCompositeNode *topNode)
       {
         double eT = raw_E / cosh(eta);
         // we  don't apply the multiplicity threshold for now, since it is not clear that it is needed for the current rho calculation.
-        // if ( eT > MULT_THRES_VAL * rho_val * w )
-        // {
-          // UE = 0;
-        // }
+        if ( eT > MULT_THRES_VAL * rho_val * w ) // mult thres is 0
+        {
+          // don't subtract negative towers
+          UE = 0;
+        }
       }
       else if ( m_rho_method == TowerRho::AREA )
       {
