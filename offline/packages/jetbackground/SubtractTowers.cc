@@ -171,6 +171,9 @@ int SubtractTowers::process_event(PHCompositeNode *topNode)
         new_energy = 0;
       }
 
+      // the SUB1 container is cloned once in CreateNode; without this its status
+      // bits are whatever the clone source held at InitRun (event 0 only)
+      emcal_towerinfos->get_tower_at_channel(channel)->set_status(tower->get_status());
       emcal_towerinfos->get_tower_at_channel(channel)->set_time(tower->get_time());
       emcal_towerinfos->get_tower_at_channel(channel)->set_energy(new_energy);
 
@@ -264,6 +267,9 @@ int SubtractTowers::process_event(PHCompositeNode *topNode)
         new_energy = 0;
       }
 
+      // the SUB1 container is cloned once in CreateNode; without this its status
+      // bits are whatever the clone source held at InitRun (event 0 only)
+      ihcal_towerinfos->get_tower_at_channel(channel)->set_status(tower->get_status());
       ihcal_towerinfos->get_tower_at_channel(channel)->set_time(tower->get_time());
       ihcal_towerinfos->get_tower_at_channel(channel)->set_energy(new_energy);
       if (Verbosity() > 5)
@@ -353,6 +359,9 @@ int SubtractTowers::process_event(PHCompositeNode *topNode)
         new_energy = 0;
       }
 
+      // the SUB1 container is cloned once in CreateNode; without this its status
+      // bits are whatever the clone source held at InitRun (event 0 only)
+      ohcal_towerinfos->get_tower_at_channel(channel)->set_status(tower->get_status());
       ohcal_towerinfos->get_tower_at_channel(channel)->set_time(tower->get_time());
       ohcal_towerinfos->get_tower_at_channel(channel)->set_energy(new_energy);
       if (Verbosity() > 5)

@@ -98,7 +98,14 @@ class DetermineTowerBackgroundv1 : public SubsysReco
 
   int LoadEtaCalib();
   int grab_mbdQ(PHCompositeNode *topNode);
-  float get_etaWeight(const int layer_index, const int ieta) const;
+  /// Returns the eta-shape weight w(layer,ieta) for the current event's
+  /// (zvertex,mbdQ) bin. If \p is_calibrated is non-null it is set to true only
+  /// when a real calibrated value was read back, and false on every fallback
+  /// (no calibration configured/loaded, event outside the calibrated
+  /// (zvertex,mbdQ) range, index out of range, or a non-physical stored value).
+  /// Callers must branch on that flag rather than testing the returned weight
+  /// against 1.0 -- a genuinely calibrated w of exactly 1.0 is not a fallback.
+  float get_etaWeight(const int layer_index, const int ieta, bool *is_calibrated = nullptr) const;
   static int find_bin(const float val, const std::vector<float> &edges);
   static int encode_channel(const int ieta, const int izbin, const int imbd, const int n_mbd_bins)
   {

@@ -53,6 +53,7 @@ pkginclude_HEADERS = \
   JetBackgroundCut.h \
   NullFilter.h \
   RetowerCEMC.h \
+  RhoUEProfile.h \
   StreakSidebandFilter.h \
   SubtractTowers.h \
   SubtractTowersCS.h \

@@ -2,6 +2,9 @@
 
 #include "TowerRhov1.h"
 
+#include <jetbase/Jet.h>
+#include <jetbase/JetContainer.h>
+#include <jetbase/JetContainerv1.h>
 #include <jetbase/JetInput.h>
 
 #include <fun4all/Fun4AllReturnCodes.h>
@@ -60,6 +63,7 @@ DetermineTowerRho::~DetermineTowerRho()
   }
   m_inputs.clear();
   m_output_nodes.clear();
+  m_jet_output_nodes.clear();
   m_rho_methods.clear();
 }
 
@@ -157,6 +161,13 @@ int DetermineTowerRho::process_event(PHCompositeNode *topNode)
     float sigma = 0;
     auto rho_method = m_rho_methods.at(ipos);
 
+    // background jets actually used by this method, kept only when the caller
+    // asked for them via add_method(..., jet_node)
+    const std::string &jet_node = m_jet_output_nodes.at(ipos);
+    const bool save_jets = !jet_node.empty();
+    std::vector<fastjet::PseudoJet> used_jets{};
+    std::vector<float> used_areas{};
+
     auto *m_eventbackground = findNode::getClass<TowerRho>(topNode, m_output_nodes.at(ipos));
     if (!m_eventbackground)
     {
@@ -221,6 +232,12 @@ int DetermineTowerRho::process_event(PHCompositeNode *topNode)
         pT_over_X.push_back(this_pT_over_X);
         total_X += this_X;
         njets_used += 1.0;
+
+        if (save_jets)
+        {
+          used_jets.push_back(fastjet);
+          used_areas.push_back(this_X);
+        }
       }  // end of loop over fastjets
 
       if (empty_X != 0.0)
@@ -246,6 +263,12 @@ int DetermineTowerRho::process_event(PHCompositeNode *topNode)
 
       sigma = std::sqrt(mean_X) * tmp_std;
       rho = tmp_med;
+
+      if (save_jets)
+      {
+        // ghosts are present here: these jets came from a ClusterSequenceArea
+        FillJetContainer(topNode, jet_node, used_jets, used_areas, particles, true, rho);
+      }
 
       // clean up
       fastjets.clear();
@@ -278,6 +301,10 @@ int DetermineTowerRho::process_event(PHCompositeNode *topNode)
           float const jet_avg_pt = (std::sqrt((total_px * total_px) + (total_py * total_py)) / (1.0 * comps.size()));
           pt_over_nconst.push_back(jet_avg_pt);
 
+          if (save_jets)
+          {
+            used_jets.push_back(fastjet);
+          }
         }  // end of if comps.size() > 0
       }  // end of loop over fastjets
 
@@ -315,6 +342,12 @@ int DetermineTowerRho::process_event(PHCompositeNode *topNode)
       sigma = std::sqrt(mean_N) * tmp_std;
       rho = tmp_med;
 
+      if (save_jets)
+      {
+        // plain ClusterSequence: no area information, so no ghosts to skip
+        FillJetContainer(topNode, jet_node, used_jets, used_areas, particles, false, rho);
+      }
+
       // clean up
       fastjets.clear();
       pt_over_nconst.clear();
@@ -350,7 +383,8 @@ int DetermineTowerRho::process_event(PHCompositeNode *topNode)
   return Fun4AllReturnCodes::EVENT_OK;
 }
 
-void DetermineTowerRho::add_method(TowerRho::Method rho_method, std::string output_node)
+void DetermineTowerRho::add_method(TowerRho::Method rho_method, std::string output_node,
+                                   std::string jet_node)
 {
   // get method name ( also checks if method is valid )
   std::string const method_name = TowerRhov1::get_method_string(rho_method);
@@ -370,6 +404,7 @@ void DetermineTowerRho::add_method(TowerRho::Method rho_method, std::string outp
     output_node = "TowerRho_" + method_name;
   }
   m_output_nodes.push_back(output_node);
+  m_jet_output_nodes.push_back(jet_node);  // empty = do not save the background jets
   return;
 }
 
@@ -401,7 +436,125 @@ int DetermineTowerRho::CreateNodes(PHCompositeNode *topNode)
     }  // end of if TowerRho
   }  // end of loop over output nodes
 
+  // optionally create a JetContainer per method, holding the background jets
+  // that method used
+  for (unsigned int ipos = 0; ipos < m_jet_output_nodes.size(); ipos++)
+  {
+    const std::string &jet_node = m_jet_output_nodes.at(ipos);
+    if (jet_node.empty())
+    {
+      continue;
+    }
+
+    auto *jetcont = findNode::getClass<JetContainer>(topNode, jet_node);
+    if (!jetcont)
+    {
+      jetcont = new JetContainerv1();
+      auto *jetDataNode = new PHIODataNode<PHObject>(jetcont, jet_node, "PHObject");
+      bkgNode->addNode(jetDataNode);
+    }
+    else
+    {
+      std::cout << PHWHERE << " JetContainer node " << jet_node
+                << " pre-exists, will be overwritten each event" << std::endl;
+    }
+
+    jetcont->set_algo(m_bkgd_jet_algo);
+    jetcont->set_jetpar_R(m_par);
+    if (m_rho_methods.at(ipos) == TowerRho::Method::AREA)
+    {
+      jetcont->add_property(Jet::PROPERTY::prop_area);
+    }
+  }
+
   return Fun4AllReturnCodes::EVENT_OK;
+}
+
+void DetermineTowerRho::FillJetContainer(PHCompositeNode *topNode, const std::string &node_name,
+                                         const std::vector<fastjet::PseudoJet> &fastjets,
+                                         const std::vector<float> &areas,
+                                         const std::vector<Jet *> &particles,
+                                         const bool has_ghosts, const float rho)
+{
+  auto *jetcont = findNode::getClass<JetContainer>(topNode, node_name);
+  if (!jetcont)
+  {
+    std::cout << PHWHERE << " JetContainer node " << node_name << " not found, not saving jets"
+              << std::endl;
+    return;
+  }
+
+  jetcont->Reset();
+  jetcont->set_algo(m_bkgd_jet_algo);
+  jetcont->set_jetpar_R(m_par);
+  jetcont->set_rho_median(rho);
+  for (auto &input : m_inputs)
+  {
+    jetcont->insert_src(input->get_src());
+  }
+
+  const bool do_area = !areas.empty();
+  Jet::PROPERTY area_idx = Jet::PROPERTY::no_property;
+  if (do_area)
+  {
+    area_idx = jetcont->property_index(Jet::PROPERTY::prop_area);
+  }
+
+  for (unsigned int ijet = 0; ijet < fastjets.size(); ijet++)
+  {
+    const auto &fj = fastjets.at(ijet);
+    auto *jet = jetcont->add_jet();
+
+    // sum the ORIGINAL, unflipped constituent momenta -- the negative-energy
+    // rescaling above is a clustering device only and must not leak into the
+    // stored kinematics (this mirrors FastJetAlgoSub)
+    float total_px = 0;
+    float total_py = 0;
+    float total_pz = 0;
+    float total_e = 0;
+    for (auto &comp : fj.constituents())
+    {
+      // is_pure_ghost() requires area information, so only ask when we have it
+      if (has_ghosts && comp.is_pure_ghost())
+      {
+        continue;
+      }
+      auto *particle = particles.at(comp.user_index());
+      total_px += particle->get_px();
+      total_py += particle->get_py();
+      total_pz += particle->get_pz();
+      total_e += particle->get_e();
+      jet->insert_comp(particle->get_comp_vec(), true);
+    }
+    jet->set_comp_sort_flag();
+
+    if (m_save_fastjet_axis)
+    {
+      jet->set_px(fj.px());
+      jet->set_py(fj.py());
+      jet->set_pz(fj.pz());
+      jet->set_e(fj.e());
+    }
+    else
+    {
+      jet->set_px(total_px);
+      jet->set_py(total_py);
+      jet->set_pz(total_pz);
+      jet->set_e(total_e);
+    }
+    jet->set_id(ijet);
+
+    if (do_area)
+    {
+      jet->set_property(area_idx, areas.at(ijet));
+    }
+  }
+
+  if (Verbosity() > 1)
+  {
+    std::cout << "DetermineTowerRho::FillJetContainer - wrote " << jetcont->size()
+              << " background jets to " << node_name << " (rho = " << rho << ")" << std::endl;
+  }
 }
 
 float DetermineTowerRho::CalcPercentile(const std::vector<float> &sorted_vec, const float percentile, const float nempty)
@@ -499,6 +652,27 @@ void DetermineTowerRho::print_settings(std::ostream &os)
   for (const auto &output : m_output_nodes)
   {
     os << output << ", ";
+  }
+  os << std::endl;
+
+  os << "Saved background jet nodes: ";
+  bool any_jets = false;
+  for (const auto &jet_node : m_jet_output_nodes)
+  {
+    if (!jet_node.empty())
+    {
+      os << jet_node << ", ";
+      any_jets = true;
+    }
+  }
+  if (!any_jets)
+  {
+    os << "(none)";
+  }
+  else
+  {
+    os << " [axis = " << (m_save_fastjet_axis ? "fastjet (flipped)" : "original constituents")
+       << "]";
   }
   os << std::endl;
 

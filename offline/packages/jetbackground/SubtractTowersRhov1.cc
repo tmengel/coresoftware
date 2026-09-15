@@ -1,5 +1,7 @@
 #include "SubtractTowersRhov1.h"
 
+#include "RhoUEProfile.h"
+
 #include "TowerRho.h"
 #include "TowerRhov1.h"
 
@@ -201,10 +203,22 @@ int SubtractTowersRhov1::grab_zvrtx( PHCompositeNode *topNode )
   }
   else
   {
+    // Same fallback as DetermineTowerBackgroundv1::get_zvrtx: if there is no vertex of
+    // the requested type, use the first vertex in the map rather than z = 0. The two
+    // subtraction paths must see the same vertex or they subtract different UE.
     auto vertices = vertexmap -> get_gvtxs_with_type( { m_vertex_type } );
-    if( !vertices.empty() && vertices.at(0) )
+    GlobalVertex * vtx = nullptr;
+    if( !vertices.empty() )
     {
-      m_vtxz = vertices.at(0) -> get_z();
+      vtx = vertices.at(0);
+    }
+    else
+    {
+      vtx = vertexmap -> begin() -> second;
+    }
+    if ( vtx )
+    {
+      m_vtxz = vtx -> get_z();
     }
   }
 
@@ -297,7 +311,7 @@ int SubtractTowersRhov1::process_event(PHCompositeNode *topNode)
 
   auto rho_val = rho_node -> get_rho();
   // const double MULT_THRES_VAL = TMath::Sqrt(2 * 1.0 );
-  const double MULT_THRES_VAL = 0.0;
+  // const double MULT_THRES_VAL = 0.0;
   for ( const auto & target_node_name : m_targetTowerNodes )
   {
 
@@ -389,29 +403,31 @@ int SubtractTowersRhov1::process_event(PHCompositeNode *topNode)
       auto tower_geom = geom -> get_tower_geometry(geo_key);
       assert(tower_geom);
 
-      auto eta0 = tower_geom -> get_eta();
-      auto z0 =  sinh(eta0) * calo_radius;
-      auto dz = z0 - m_vtxz;
-      double eta = asinh( dz / calo_radius);
-
-      const double w = get_etaWeight( layer_index, ieta );
-      double UE = rho_val * cosh(eta) * w;
-      if ( m_rho_method == TowerRho::MULT )
+      // UE via the arithmetic shared with DetermineTowerBackgroundv1 (RhoUEProfile.h).
+      // That path stores its profile as float, so this path must round the same way
+      // at every step, or the two produce towers that differ at the ULP level and
+      // anti-kT turns those into different jets.
+      const float eta_corr = RhoUEProfile::corrected_eta( tower_geom -> get_eta(), static_cast<float>( calo_radius ), m_vtxz );
+      const float w = get_etaWeight( layer_index, ieta );
+      float UE = RhoUEProfile::ue( rho_val, eta_corr, w );
+      // if ( m_rho_method == TowerRho::MULT )
+      // {
+      //   double eT = raw_E / cosh(eta);
+      //   // we  don't apply the multiplicity threshold for now, since it is not clear that it is needed for the current rho calculation.
+      //   // if ( eT > MULT_THRES_VAL * rho_val * w ) // mult thres is 0
+      //   // {
+      //   //   // don't subtract negative towers
+      //   //   UE = 0;
+      //   // }
+      // }
+      // else 
+      if ( m_rho_method == TowerRho::AREA )
       {
-        double eT = raw_E / cosh(eta);
-        // we  don't apply the multiplicity threshold for now, since it is not clear that it is needed for the current rho calculation.
-        if ( eT > MULT_THRES_VAL * rho_val * w ) // mult thres is 0
-        {
-          // don't subtract negative towers
-          UE = 0;
-        }
-      }
-      else if ( m_rho_method == TowerRho::AREA )
-      {
-        UE *= dA_vals.at(ieta);
+        UE = static_cast<float>( UE * dA_vals.at(ieta) );
       }
 
-      double sub_E = raw_E - UE;
+      // float - float, exactly as SubtractTowers does it
+      const float sub_E = raw_E - UE;
 
       sub_towerinfos -> get_tower_at_channel(ich) -> set_energy(sub_E);
       sub_towerinfos -> get_tower_at_channel(ich) -> set_time(tower -> get_time());

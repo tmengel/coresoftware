@@ -38,7 +38,28 @@ class DetermineTowerRho : public SubsysReco
   int process_event(PHCompositeNode *topNode) override;
 
   // add rho method (Area or Multiplicity)
-  void add_method(TowerRho::Method rho_method, std::string output_node = "");
+  //
+  // If jet_node is non-empty, the background jets that this method actually used
+  // -- i.e. the ones surviving get_jet_selector() and contributing to the median
+  // -- are additionally written to the node tree as a JetContainer under that
+  // name, so they can be analysed downstream. The container also carries the
+  // resulting rho via JetContainer::get_rho_median().
+  void add_method(TowerRho::Method rho_method, std::string output_node = "",
+                  std::string jet_node = "");
+
+  // Choose which four-vector is stored for the saved background jets.
+  //   false (default) : rebuilt by summing the ORIGINAL constituent momenta.
+  //                     This matches what FastJetAlgoSub writes, so the saved
+  //                     jets are directly comparable to seed containers built
+  //                     by JetReco.
+  //   true            : the raw fastjet axis, i.e. built from constituents after
+  //                     negative-energy towers were flipped to +1 MeV for
+  //                     clustering. Note this is the axis the jet eta acceptance
+  //                     cut is applied to, so it is the one that determines which
+  //                     jets entered rho -- useful for studying that acceptance.
+  // The two differ appreciably only for soft jets; see get_jet_selector().
+  void set_save_fastjet_axis(const bool b) { m_save_fastjet_axis = b; }
+  bool get_save_fastjet_axis() const { return m_save_fastjet_axis; }
 
   // inputs for estimating background
   void add_input(JetInput *input) { m_inputs.push_back(input); }
@@ -89,7 +110,10 @@ class DetermineTowerRho : public SubsysReco
   // variables
   std::vector<JetInput *> m_inputs{};
   std::vector<std::string> m_output_nodes{};
+  std::vector<std::string> m_jet_output_nodes{};  // empty string = do not save jets
   std::vector<TowerRho::Method> m_rho_methods{};
+
+  bool m_save_fastjet_axis{false};
 
   Jet::ALGO m_bkgd_jet_algo{Jet::ALGO::KT};  // default is KT
   float m_par{0.4};                          // default is 0.4
@@ -104,6 +128,15 @@ class DetermineTowerRho : public SubsysReco
 
   // internal methods
   int CreateNodes(PHCompositeNode *topNode);
+
+  // Write the background jets used for one rho method into its JetContainer node.
+  // has_ghosts must be true only when the jets came from a ClusterSequenceArea,
+  // since PseudoJet::is_pure_ghost() requires area information to be present.
+  void FillJetContainer(PHCompositeNode *topNode, const std::string &node_name,
+                        const std::vector<fastjet::PseudoJet> &fastjets,
+                        const std::vector<float> &areas,
+                        const std::vector<Jet *> &particles,
+                        bool has_ghosts, float rho);
 
   static float CalcPercentile(const std::vector<float> &sorted_vec,
                               const float percentile, const float nempty);

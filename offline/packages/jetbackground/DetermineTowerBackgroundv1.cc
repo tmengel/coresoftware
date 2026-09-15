@@ -1,5 +1,6 @@
 #include "DetermineTowerBackgroundv1.h"
 
+#include "RhoUEProfile.h"
 #include "TowerBackground.h"
 #include "TowerBackgroundv1.h"
 
@@ -168,8 +169,16 @@ int DetermineTowerBackgroundv1::LoadEtaCalib()
   return Fun4AllReturnCodes::EVENT_OK;
 }
 
-float DetermineTowerBackgroundv1::get_etaWeight( const int layer_index, const int ieta ) const
+float DetermineTowerBackgroundv1::get_etaWeight( const int layer_index, const int ieta, bool * is_calibrated ) const
 {
+  // every early return below is a *fallback*: no calibrated weight was available,
+  // so w defaults to 1. Callers distinguish this from a calibrated weight that
+  // happens to equal 1.0 via is_calibrated -- never by comparing w to 1.0.
+  if ( is_calibrated )
+  {
+    *is_calibrated = false;
+  }
+
   if ( !m_use_etaCalib || !m_etaCalib_loaded || !m_calib_tree )
   {
     return 1.0f;
@@ -193,6 +202,11 @@ float DetermineTowerBackgroundv1::get_etaWeight( const int layer_index, const in
   if ( !(w > 0) || std::isnan(w) )
   {
     return 1.0f;
+  }
+
+  if ( is_calibrated )
+  {
+    *is_calibrated = true;
   }
   return w;
 }
@@ -1128,38 +1142,7 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
 
   } // now seeds are excluded
 
-  // if we have exclude eta full strip then we do that here
-  // these are only eta strips that have a seed in them - not bad towers
-  // if ( m_exclude_full_eta_flow_strips )
-  // {
-  //   for ( int ieta = 0; ieta < m_num_eta_ihcal; ieta++ )
-  //   {
-  //     bool has_seed_in_strip = false;
-  //     for ( int iphi = 0; iphi < m_num_phi_ihcal; iphi++ )
-  //     {
-  //       if ( m_emcal_mask[ieta][iphi] || m_ihcal_mask[ieta][iphi] || m_ohcal_mask[ieta][iphi] )
-  //       {
-  //         has_seed_in_strip = true;
-  //         break;
-  //       }
-  //     }
-  //     if ( has_seed_in_strip )
-  //     {
-  //       for ( int iphi = 0; iphi < m_num_phi_ihcal; iphi++ )
-  //       {
-  //         // mask the whole thing - this is dumb but how the code is currently structured
-  //         m_ihcal_flow_mask[ieta][iphi] = true;
-  //         m_emcal_flow_mask[ieta][iphi] = true;
-  //         m_ohcal_flow_mask[ieta][iphi] = true;
-  //       }
-  //       if ( Verbosity() > 2 )
-  //       {
-  //         std::cout << "DetermineTowerBackgroundv1::process_event: --> marking full eta strip at ieta = " << ieta << " as masked since it contains a seed jet" << std::endl;
-  //       }
-  //     }
-  //   }
-  // } // end of full eta strip exclusion
-
+  
   // fill tower vectors for each jet src
   // also set non-flow mask
   // if !do_reweight then eta strips with bad towers are fully masked
@@ -1170,37 +1153,34 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
     m_towerinfos = nullptr;
     m_towergeom = nullptr;
     m_caloid = RawTowerDefs::CalorimeterId::NONE;
+    double tower_r = 0.0;
     if ( src == Jet::SRC::HCALIN_TOWERINFO )
     {
-      // m_towerinfos = LoadTowerInfoContainer(topNode, m_ihcal_towerinfo_node);
-      // m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
       m_towerinfos = ihcal_towerinfos;
       m_towergeom  = ihcal_towergeom;
       m_caloid     = RawTowerDefs::CalorimeterId::HCALIN;
+      tower_r      = m_ihcal_r;
     }
     else if ( src == Jet::SRC::HCALOUT_TOWERINFO )
     {
-      // m_towerinfos  = LoadTowerInfoContainer(topNode, m_ohcal_towerinfo_node);
-      // m_towergeom   = LoadTowerGeomContainer(topNode, m_ohcal_geom_node);
       m_towerinfos  = ohcal_towerinfos;
       m_towergeom   = ohcal_towergeom;
       m_caloid      = RawTowerDefs::CalorimeterId::HCALOUT;
+      tower_r       = m_ohcal_r;
     }
     else if ( src == Jet::SRC::CEMC_TOWERINFO_RETOWER  )
     {
-      // m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_retowerinfo_node);
-      // m_towergeom  = LoadTowerGeomContainer(topNode, m_ihcal_geom_node);
       m_towerinfos = cemc_retowerinfos;
       m_towergeom  = ihcal_towergeom;
       m_caloid     = RawTowerDefs::CalorimeterId::HCALIN;
+      tower_r      = m_emcal_r;
     }
     else if ( src == Jet::SRC::CEMC_TOWERINFO  )
     {
-      // m_towerinfos = LoadTowerInfoContainer(topNode, m_cemc_towerinfo_node);
-      // m_towergeom  = LoadTowerGeomContainer(topNode, m_cemc_geom_node);
       m_towerinfos = cemc_towerinfos;
       m_towergeom  = cemc_towergeom;
       m_caloid     = RawTowerDefs::CalorimeterId::CEMC;
+      tower_r      = m_emcal_r;
     }
     
     int ntowers = m_towerinfos -> size();
@@ -1225,15 +1205,16 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
 
       const int jeta = m_ihcal_geom -> get_etabin( comp_eta );
       const int jphi = m_ihcal_geom -> get_phibin( comp_phi );
+
+      // vertex-corrected eta, via the arithmetic shared with SubtractTowersRhov1
+      const float comp_eta_corr = RhoUEProfile::corrected_eta( comp_eta, static_cast<float>( tower_r ), m_vtxz );
       
       bool mask_tower = false;
-      // if ( is_bad || comp_E <= m_min_tower_energy )
       if ( is_bad )
       {
         mask_tower = true;
       }
 
-      // tag eta strip to be masked and update it later if nessicary
       if ( mask_tower )
       {
         eta_strips_to_be_fully_masked.insert(jeta);
@@ -1243,18 +1224,21 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
         m_ihcal_mask.at(jeta).at(jphi) = mask_tower;
         m_ihcal_energy.at(jeta).at(jphi) += comp_E;
         m_ihcal_flow_mask.at(jeta).at(jphi) = mask_tower;
+        m_ihcal_tower_eta.at(jeta) = comp_eta_corr;
       }
       if ( src == Jet::SRC::HCALOUT_TOWERINFO )
       {
         m_ohcal_mask.at(jeta).at(jphi) = mask_tower;
         m_ohcal_energy.at(jeta).at(jphi) += comp_E;
         m_ohcal_flow_mask.at(jeta).at(jphi) = mask_tower;
+        m_ohcal_tower_eta.at(jeta) = comp_eta_corr;
       }
       if ( src == Jet::SRC::CEMC_TOWERINFO  || src == Jet::SRC::CEMC_TOWERINFO_RETOWER )
       {
         m_emcal_mask.at(jeta).at(jphi) = mask_tower;
         m_emcal_energy.at(jeta).at(jphi) += comp_E;
         m_emcal_flow_mask.at(jeta).at(jphi) = mask_tower;
+        m_emcal_tower_eta.at(jeta) = comp_eta_corr;
       }
     } // end of tower loop
 
@@ -1427,92 +1411,6 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
     }
   }
 
-  // cool now we have the modulation and we can recalculate the energy densities
-  // for (int ieta = 0; ieta < m_num_eta_ihcal; ieta++ )
-  // {
-  //   float total_emcal_energy = 0.0;
-  //   float total_ihcal_energy = 0.0;
-  //   float total_ohcal_energy = 0.0;
-  //   int n_emcal_towers = 0;
-  //   int n_ihcal_towers = 0;
-  //   int n_ohcal_towers = 0;
-  //   for ( int iphi = 0; iphi < m_num_phi_ihcal; iphi++ )
-  //   {
-  //     double phi = m_ihcal_geom -> get_phicenter( iphi );
-  //     double modulation = 1.0 + 2.0 * m_v2 * cos( 2.0 * ( phi - m_psi2 ) );
-  //     if ( modulation == 0 )
-  //     {
-  //       if (Verbosity() > 0)
-  //       {
-  //         std::cout << "DetermineTowerBackgroundv1::process_event: WARNING modulation factor is 0 at phi = " << phi << ", setting modulation factor to 1 to avoid division by zero" << std::endl;
-  //       }
-  //       modulation = 1.0;
-  //     }
-  //     if ( !m_emcal_mask[ieta][iphi] )
-  //     {
-  //       total_emcal_energy += m_emcal_energy[ieta][iphi] / modulation;
-  //       n_emcal_towers++;
-  //     }
-  //     if ( !m_ihcal_mask[ieta][iphi] )
-  //     {
-  //       total_ihcal_energy += m_ihcal_energy[ieta][iphi] / modulation;
-  //       n_ihcal_towers++;
-  //     }
-  //     if ( !m_ohcal_mask[ieta][iphi] )
-  //     {
-  //       total_ohcal_energy += m_ohcal_energy[ieta][iphi] / modulation;
-  //       n_ohcal_towers++;
-  //     }
-      
-  //   } // end loop over phi bins
-  //   // average
-  //   if ( n_emcal_towers > 0 )
-  //   {
-  //     m_ue_density.at(0).at(ieta) = total_emcal_energy / n_emcal_towers;
-  //   }
-  //   if ( n_ihcal_towers > 0 )
-  //   {
-  //     m_ue_density.at(1).at(ieta) = total_ihcal_energy / n_ihcal_towers;
-  //   }
-  //   if ( n_ohcal_towers > 0 )
-  //   {
-  //     m_ue_density.at(2).at(ieta) = total_ohcal_energy / n_ohcal_towers;
-  //   }
-
-  //   // number of total towers used in flow calculation
-  //   m_ntowers += n_emcal_towers + n_ihcal_towers + n_ohcal_towers;
-  //   if ( n_emcal_towers + n_ihcal_towers + n_ohcal_towers > 0 )
-  //   {
-  //     // only count strips that have at least one tower used in flow calculation
-  //     m_nstrips++;
-  //   }
-    
-  //   if ( Verbosity() > 0 )    
-  //   {
-  //     std::cout << "DetermineTowerBackgroundv1::process_event: after flow modulation, average energy in eta strip " << ieta << " is " << m_ue_density.at(0).at(ieta) << " for EMCAL, " << m_ue_density.at(1).at(ieta) << " for IHCAL, and " << m_ue_density.at(2).at(ieta) << std::endl;
-  //   }
-
-  // }
-  // if m_do_double_chcek_on_UE is true then we check if the UE density in any eta strip is negative or above some reasonable threshold, and if so we set the flow failure flag to true and set the UE density to 0 to avoid unphysical results in the jet background subtraction
-  // check for any negative UE , or extremely high UE that might indicate a problem
-  // if ( m_do_double_check_on_UE )
-  // {
-  //   for (int ieta = 0; ieta < m_num_eta_ihcal; ieta++ )
-  //   {
-  //     if ( m_ue_density.at(0).at(ieta)   < 0 
-  //         || m_ue_density.at(1).at(ieta) < 0 
-  //         || m_ue_density.at(2).at(ieta) < 0 )
-  //     {
-  //       if ( Verbosity() > 0 )
-  //       {
-  //         std::cout << "DetermineTowerBackgroundv1::process_event: WARNING: negative UE density detected in eta bin " << ieta << ", setting flow failure flag to true and UE density to 0" << std::endl;
-  //       }
-  //       m_ue_density.at(0).at(ieta) = std::max( 0.0f, m_ue_density.at(0).at(ieta) );
-  //       m_ue_density.at(1).at(ieta) = std::max( 0.0f, m_ue_density.at(1).at(ieta) );
-  //       m_ue_density.at(2).at(ieta) = std::max( 0.0f, m_ue_density.at(2).at(ieta) );
-  //     }
-  //   }
-  // }
 
   // get rho values
   double rho_emcal = 0.0, rho_ihcal = 0.0, rho_ohcal = 0.0;
@@ -1554,25 +1452,37 @@ int DetermineTowerBackgroundv1::process_event(PHCompositeNode *topNode)
     double ue_ihcal = m_ue_density.at(1).at(ieta);
     double ue_ohcal = m_ue_density.at(2).at(ieta);
 
-    double ue_emcal_rho = rho_emcal * cosh( m_emcal_tower_eta.at(ieta) ) * get_etaWeight( 0, ieta );
-    double ue_ihcal_rho = rho_ihcal * cosh( m_ihcal_tower_eta.at(ieta) ) * get_etaWeight( 1, ieta );
-    double ue_ohcal_rho = rho_ohcal * cosh( m_ohcal_tower_eta.at(ieta) ) * get_etaWeight( 2, ieta );
+    bool emcal_is_calib = false;
+    bool ihcal_is_calib = false;
+    bool ohcal_is_calib = false;
+    const double w_emcal = get_etaWeight( 0, ieta, &emcal_is_calib );
+    const double w_ihcal = get_etaWeight( 1, ieta, &ihcal_is_calib );
+    const double w_ohcal = get_etaWeight( 2, ieta, &ohcal_is_calib );
+
+    // UE via the arithmetic shared with SubtractTowersRhov1 -- see RhoUEProfile.h
+    double ue_emcal_rho = RhoUEProfile::ue( static_cast<float>( rho_emcal ), m_emcal_tower_eta.at(ieta), static_cast<float>( w_emcal ) );
+    double ue_ihcal_rho = RhoUEProfile::ue( static_cast<float>( rho_ihcal ), m_ihcal_tower_eta.at(ieta), static_cast<float>( w_ihcal ) );
+    double ue_ohcal_rho = RhoUEProfile::ue( static_cast<float>( rho_ohcal ), m_ohcal_tower_eta.at(ieta), static_cast<float>( w_ohcal ) );
 
     m_ue_density.at(0).at(ieta) = ue_emcal_rho;
     m_ue_density.at(1).at(ieta) = ue_ihcal_rho;
     m_ue_density.at(2).at(ieta) = ue_ohcal_rho;
-    // guard against a zero (or vanishingly small) detector-wide average, which would otherwise
-    // send this ratio to +/-inf; fall back to the flat, unmodulated rho*cosh(eta) profile
-    // default to event by event if w = 1
-    if (get_etaWeight(0,ieta) == 1.0)
+    // Where no calibrated eta-shape weight was available, fall back to the shape
+    // measured in this event (the per-strip average relative to the detector-wide
+    // average). This is keyed off is_calibrated, NOT off w == 1.0: a calibration
+    // that genuinely returns w = 1.0 for a bin is a calibrated answer and must be
+    // used as-is, otherwise this silently diverges from SubtractTowersRhov1.
+    // Guard against a zero (or vanishingly small) detector-wide average, which would
+    // otherwise send the ratio to +/-inf; there we keep the flat rho*cosh(eta) profile.
+    if ( !emcal_is_calib )
     {
       m_ue_density.at(0).at(ieta) = ( avg_avg_emcal_energy != 0.0 ) ? ue_emcal_rho * ( ue_emcal / avg_avg_emcal_energy ) : ue_emcal_rho;
     }
-    if (get_etaWeight(1,ieta) == 1.0)
+    if ( !ihcal_is_calib )
     {
       m_ue_density.at(1).at(ieta) = ( avg_avg_ihcal_energy != 0.0 ) ? ue_ihcal_rho * ( ue_ihcal / avg_avg_ihcal_energy ) : ue_ihcal_rho;
     }
-    if (get_etaWeight(2,ieta) == 1.0)
+    if ( !ohcal_is_calib )
     {
       m_ue_density.at(2).at(ieta) = ( avg_avg_ohcal_energy != 0.0 ) ? ue_ohcal_rho * ( ue_ohcal / avg_avg_ohcal_energy ) : ue_ohcal_rho;
     }
