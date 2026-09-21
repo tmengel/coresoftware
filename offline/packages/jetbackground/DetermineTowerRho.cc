@@ -32,6 +32,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <sstream>  // for basic_ostringstream
 #include <string>
 #include <vector>
@@ -62,6 +63,8 @@ DetermineTowerRho::~DetermineTowerRho()
     delete input;
   }
   m_inputs.clear();
+  delete m_scratch_jets;
+  m_scratch_jets = nullptr;
   m_output_nodes.clear();
   m_jet_output_nodes.clear();
   m_rho_methods.clear();
@@ -161,13 +164,6 @@ int DetermineTowerRho::process_event(PHCompositeNode *topNode)
     float sigma = 0;
     auto rho_method = m_rho_methods.at(ipos);
 
-    // background jets actually used by this method, kept only when the caller
-    // asked for them via add_method(..., jet_node)
-    const std::string &jet_node = m_jet_output_nodes.at(ipos);
-    const bool save_jets = !jet_node.empty();
-    std::vector<fastjet::PseudoJet> used_jets{};
-    std::vector<float> used_areas{};
-
     auto *m_eventbackground = findNode::getClass<TowerRho>(topNode, m_output_nodes.at(ipos));
     if (!m_eventbackground)
     {
@@ -181,182 +177,93 @@ int DetermineTowerRho::process_event(PHCompositeNode *topNode)
       exit(1);
     }
 
+    // cluster the background jets with fastjet; ghosts (and so areas) are only
+    // needed, and only available, for the area method
+    std::unique_ptr<fastjet::ClusterSequence> cluseq{};
     if (rho_method == TowerRho::Method::AREA)
     {
       fastjet::AreaDefinition const area_def(fastjet::active_area_explicit_ghosts,
                                              fastjet::GhostedAreaSpec(m_abs_input_eta_range, 1, m_ghost_area));
-      auto *m_cluseq = new fastjet::ClusterSequenceArea(calo_pseudojets, *m_jet_def, area_def);
-      auto fastjets = jet_selector(m_cluseq->inclusive_jets());
-
-      std::vector<float> pT_over_X{};
-      float total_X = 0;
-      float njets_used = 0.0;
-      float empty_X = 0;
-      float const njets_total = static_cast<float>(fastjets.size());
-
-      for (auto &fastjet : fastjets)
-      {
-        float const this_X = fastjet.area();
-        // if (this_X <= 0 || this_X != this_X || fastjet.is_pure_ghost())
-        if (this_X <= 0 || this_X != this_X)
-        {
-          if (Verbosity() > 2)
-          {
-            std::cout << PHWHERE << " ::WARNING: Discarding jet with zero area. Zero-area jets may be due to (i) too large a ghost area (ii) a jet being outside the ghost range (iii) the computation not being done using an appropriate algorithm (kt;C/A)." << std::endl;
-          }
-          if (!std::isnan(this_X))
-          {
-            empty_X += this_X;
-          }
-          continue;  // skip this jet
-        }  // end of check on X
-
-        // add back the truth comp pT
-        float px_sum = 0;
-        float py_sum = 0;
-        for (auto &comp : fastjet.constituents())
-        {
-          if (comp.is_pure_ghost())
-          {  // skip pure ghosts
-            continue;
-          }
-
-          auto *p = particles[comp.user_index()];  // get original particle
-          px_sum += p->get_px();
-          py_sum += p->get_py();
-
-        }  // end of loop over fastjet comps
-
-        // calculate pT and pT/X
-        float const this_pT_over_X = std::sqrt((px_sum * px_sum) + (py_sum * py_sum)) / this_X;
-        pT_over_X.push_back(this_pT_over_X);
-        total_X += this_X;
-        njets_used += 1.0;
-
-        if (save_jets)
-        {
-          used_jets.push_back(fastjet);
-          used_areas.push_back(this_X);
-        }
-      }  // end of loop over fastjets
-
-      if (empty_X != 0.0)
-      {
-        if (Verbosity() > 0)
-        {
-          std::cerr << PHWHERE << " ::WARNING: Found " << empty_X << " empty jets with zero area. This may be due to (i) too large a ghost area (ii) a jet being outside the ghost range (iii) the computation not being done using an appropriate algorithm (kt;C/A)." << std::endl;
-        }
-        total_X += empty_X;
-      }
-
-      float const n_empty_jets = njets_total - njets_used;
-      float mean_X = (1.0 * total_X) / (njets_total);
-      if (mean_X < 0)
-      {
-        std::cerr << PHWHERE << " mean_N < 0 , setting to 0" << std::endl;
-        mean_X = 0;
-      }
-
-      float tmp_med;
-      float tmp_std;
-      CalcMedianStd(pT_over_X, n_empty_jets, tmp_med, tmp_std);
-
-      sigma = std::sqrt(mean_X) * tmp_std;
-      rho = tmp_med;
-
-      if (save_jets)
-      {
-        // ghosts are present here: these jets came from a ClusterSequenceArea
-        FillJetContainer(topNode, jet_node, used_jets, used_areas, particles, true, rho);
-      }
-
-      // clean up
-      fastjets.clear();
-      pT_over_X.clear();
-      delete m_cluseq;
+      cluseq = std::make_unique<fastjet::ClusterSequenceArea>(calo_pseudojets, *m_jet_def, area_def);
     }
     else if (rho_method == TowerRho::Method::MULT)
     {
-      // reconstruct the background jets
-      auto *m_cluseq = new fastjet::ClusterSequence(calo_pseudojets, *m_jet_def);
-      auto fastjets = jet_selector(m_cluseq->inclusive_jets());
-
-      std::vector<float> pt_over_nconst{};
-      int total_constituents = 0;
-
-      for (auto &fastjet : fastjets)
-      {
-        auto comps = fastjet.constituents();
-        if (!comps.empty())
-        {
-          float total_px = 0;
-          float total_py = 0;
-          for (auto &comp : comps)
-          {
-            auto *particle = particles[comp.user_index()];
-            total_px += particle->get_px();
-            total_py += particle->get_py();
-            total_constituents++;
-          }  // end of loop over constituents
-          float const jet_avg_pt = (std::sqrt((total_px * total_px) + (total_py * total_py)) / (1.0 * comps.size()));
-          pt_over_nconst.push_back(jet_avg_pt);
-
-          if (save_jets)
-          {
-            used_jets.push_back(fastjet);
-          }
-        }  // end of if comps.size() > 0
-      }  // end of loop over fastjets
-
-      // {
-      //   // auto comps = fastjets[ijet].constituents();
-      //   if (comps.size() > 0)
-      //   {
-      //     float total_px = 0;
-      //     float total_py = 0;
-      //     for (auto &comp : comps)
-      //     {
-      //       auto particle = particles[comp.user_index()];
-      //       total_px += particle->get_px();
-      //       total_py += particle->get_py();
-      //       total_constituents++;
-      //     }  // end of loop over constituents
-      //     float jet_avg_pt = (std::sqrt((total_px * total_px) + (total_py * total_py)) / (1.0 * comps.size()));
-      //     pt_over_nconst.push_back(jet_avg_pt);
-
-      //   }  // end of if comps.size() > 0
-      // }    // end of loop over fastjets
-
-      float const n_empty_jets = 1.0 * (fastjets.size() - pt_over_nconst.size());
-      float mean_N = (1.0 * total_constituents) / (1.0 * fastjets.size());
-      if (mean_N < 0)
-      {
-        std::cerr << PHWHERE << " mean_N < 0 , setting to 0" << std::endl;
-        mean_N = 0;
-      }
-
-      float tmp_med;
-      float tmp_std;
-      CalcMedianStd(pt_over_nconst, 1.0 * n_empty_jets, tmp_med, tmp_std);
-
-      sigma = std::sqrt(mean_N) * tmp_std;
-      rho = tmp_med;
-
-      if (save_jets)
-      {
-        // plain ClusterSequence: no area information, so no ghosts to skip
-        FillJetContainer(topNode, jet_node, used_jets, used_areas, particles, false, rho);
-      }
-
-      // clean up
-      fastjets.clear();
-      pt_over_nconst.clear();
-      delete m_cluseq;
+      cluseq = std::make_unique<fastjet::ClusterSequence>(calo_pseudojets, *m_jet_def);
     }
     else
     {
       std::cout << PHWHERE << " rho method not recognized" << std::endl;
     }
+
+    if (cluseq)
+    {
+      // The eta acceptance and min pT are applied on the fastjet side: the fastjet
+      // axis is well defined for every jet, whereas the sPHENIX four-vector is not
+      // for pure-ghost jets (zero momentum, so eta is NaN) or for net-negative-energy
+      // jets (whose eta and phi flip). This is also the axis the eta acceptance is
+      // defined on.
+      auto fastjets = jet_selector(cluseq->inclusive_jets());
+
+      // Convert the selected jets back to sPHENIX Jets, with the negative-energy
+      // towers reincorporated. A JetContainer cannot drop a jet once it is added, so
+      // all of them go to a scratch container first, where the hardest are omitted.
+      const bool with_area = (rho_method == TowerRho::Method::AREA);
+      if (!m_scratch_jets)
+      {
+        m_scratch_jets = new JetContainerv1();
+      }
+      std::vector<float> signed_pt{};
+      ConvertJets(m_scratch_jets, signed_pt, fastjets, particles, with_area);
+
+      // omit the hardest jets, ranked by the pT of the sPHENIX jets
+      const std::vector<unsigned int> keep = SelectJets(m_scratch_jets, signed_pt);
+
+      // estimate rho from the sPHENIX jets that remain
+      CalcRho(m_scratch_jets, signed_pt, keep, rho_method, rho, sigma);
+
+      // save the jets that were used, if the caller asked for them
+      const std::string &jet_node = m_jet_output_nodes.at(ipos);
+      if (!jet_node.empty())
+      {
+        auto *jets = findNode::getClass<JetContainer>(topNode, jet_node);
+        if (jets)
+        {
+          std::vector<fastjet::PseudoJet> used_fastjets{};
+          used_fastjets.reserve(keep.size());
+          for (const auto ijet : keep)
+          {
+            used_fastjets.push_back(fastjets[ijet]);
+          }
+          std::vector<float> used_signed_pt{};
+          ConvertJets(jets, used_signed_pt, used_fastjets, particles, with_area);
+          jets->set_rho_median(rho);
+
+          if (m_save_fastjet_axis)
+          {
+            // rho has been estimated already, so only what is stored changes here
+            for (unsigned int ijet = 0; ijet < used_fastjets.size(); ijet++)
+            {
+              auto *jet = jets->get_jet(ijet);
+              jet->set_px(used_fastjets[ijet].px());
+              jet->set_py(used_fastjets[ijet].py());
+              jet->set_pz(used_fastjets[ijet].pz());
+              jet->set_e(used_fastjets[ijet].e());
+            }
+          }
+
+          if (Verbosity() > 1)
+          {
+            std::cout << "DetermineTowerRho::process_event - wrote " << jets->size()
+                      << " background jets to " << jet_node << " (rho = " << rho << ")" << std::endl;
+          }
+        }
+        else
+        {
+          std::cout << PHWHERE << " JetContainer node " << jet_node << " not found, not saving jets"
+                    << std::endl;
+        }
+      }
+    }  // end of if cluseq
 
     if (Verbosity() > 1)
     {
@@ -470,52 +377,46 @@ int DetermineTowerRho::CreateNodes(PHCompositeNode *topNode)
   return Fun4AllReturnCodes::EVENT_OK;
 }
 
-void DetermineTowerRho::FillJetContainer(PHCompositeNode *topNode, const std::string &node_name,
-                                         const std::vector<fastjet::PseudoJet> &fastjets,
-                                         const std::vector<float> &areas,
-                                         const std::vector<Jet *> &particles,
-                                         const bool has_ghosts, const float rho)
+void DetermineTowerRho::ConvertJets(JetContainer *jets, std::vector<float> &signed_pt,
+  const std::vector<fastjet::PseudoJet> &fastjets,
+  const std::vector<Jet *> &particles,
+  const bool with_area) const
 {
-  auto *jetcont = findNode::getClass<JetContainer>(topNode, node_name);
-  if (!jetcont)
+  jets->Reset();
+  signed_pt.clear();
+  signed_pt.reserve(fastjets.size());
+  jets->set_algo(m_bkgd_jet_algo);
+  jets->set_jetpar_R(m_par);
+  for (const auto &input : m_inputs)
   {
-    std::cout << PHWHERE << " JetContainer node " << node_name << " not found, not saving jets"
-              << std::endl;
-    return;
+    jets->insert_src(input->get_src());
   }
 
-  jetcont->Reset();
-  jetcont->set_algo(m_bkgd_jet_algo);
-  jetcont->set_jetpar_R(m_par);
-  jetcont->set_rho_median(rho);
-  for (auto &input : m_inputs)
-  {
-    jetcont->insert_src(input->get_src());
-  }
-
-  const bool do_area = !areas.empty();
   Jet::PROPERTY area_idx = Jet::PROPERTY::no_property;
-  if (do_area)
+  if (with_area)
   {
-    area_idx = jetcont->property_index(Jet::PROPERTY::prop_area);
+    area_idx = jets->property_index(Jet::PROPERTY::prop_area);
   }
 
   for (unsigned int ijet = 0; ijet < fastjets.size(); ijet++)
   {
     const auto &fj = fastjets.at(ijet);
-    auto *jet = jetcont->add_jet();
+    auto *jet = jets->add_jet();
 
     // sum the ORIGINAL, unflipped constituent momenta -- the negative-energy
-    // rescaling above is a clustering device only and must not leak into the
-    // stored kinematics (this mirrors FastJetAlgoSub)
+    // rescaling in process_event is a clustering device only, so summing the
+    // original towers is what reincorporates them (this mirrors FastJetAlgoSub)
     float total_px = 0;
     float total_py = 0;
     float total_pz = 0;
     float total_e = 0;
+    // the signed scalar sum: a negative-energy tower carries a negative pT, so it
+    // subtracts here instead of being folded up by the magnitude below
+    float total_signed_pt = 0;
     for (auto &comp : fj.constituents())
     {
       // is_pure_ghost() requires area information, so only ask when we have it
-      if (has_ghosts && comp.is_pure_ghost())
+      if (with_area && comp.is_pure_ghost())
       {
         continue;
       }
@@ -524,36 +425,174 @@ void DetermineTowerRho::FillJetContainer(PHCompositeNode *topNode, const std::st
       total_py += particle->get_py();
       total_pz += particle->get_pz();
       total_e += particle->get_e();
+      // Jet::get_pt() is a magnitude, so take the sign from the energy: the inputs
+      // build the momentum as pT = E / cosh(eta), which flips sign with E
+      total_signed_pt += (particle->get_e() < 0) ? -particle->get_pt() : particle->get_pt();
       jet->insert_comp(particle->get_comp_vec(), true);
     }
     jet->set_comp_sort_flag();
+    signed_pt.push_back(total_signed_pt);
 
-    if (m_save_fastjet_axis)
-    {
-      jet->set_px(fj.px());
-      jet->set_py(fj.py());
-      jet->set_pz(fj.pz());
-      jet->set_e(fj.e());
-    }
-    else
-    {
-      jet->set_px(total_px);
-      jet->set_py(total_py);
-      jet->set_pz(total_pz);
-      jet->set_e(total_e);
-    }
+    jet->set_px(total_px);
+    jet->set_py(total_py);
+    jet->set_pz(total_pz);
+    jet->set_e(total_e);
     jet->set_id(ijet);
 
-    if (do_area)
+    if (with_area)
     {
-      jet->set_property(area_idx, areas.at(ijet));
+      jet->set_property(area_idx, static_cast<float>(fj.area()));
     }
   }
+}
 
-  if (Verbosity() > 1)
+float DetermineTowerRho::JetPt(JetContainer *jets, const std::vector<float> &signed_pt,
+                               const unsigned int ijet) const
+{
+  if (m_use_signed_sum)
   {
-    std::cout << "DetermineTowerRho::FillJetContainer - wrote " << jetcont->size()
-              << " background jets to " << node_name << " (rho = " << rho << ")" << std::endl;
+    return signed_pt.at(ijet);
+  }
+  return jets->get_jet(ijet)->get_pt();
+}
+
+std::vector<unsigned int> DetermineTowerRho::SelectJets(JetContainer *jets,
+                                                        const std::vector<float> &signed_pt) const
+{
+  const unsigned int njets = jets->size();
+
+  // rank the jets by pT, hardest first; ties keep their original order
+  std::vector<float> pts(njets);
+  std::vector<unsigned int> order(njets);
+  for (unsigned int ijet = 0; ijet < njets; ijet++)
+  {
+    pts[ijet] = JetPt(jets, signed_pt, ijet);
+    order[ijet] = ijet;
+  }
+  const unsigned int nomit = std::min(m_omit_nhardest, njets);
+  std::partial_sort(order.begin(), order.begin() + nomit, order.end(),
+                    [&pts](const unsigned int a, const unsigned int b)
+                    { return pts[a] > pts[b] || (pts[a] == pts[b] && a < b); });
+
+  // omit the nomit hardest; the rest keep their original order
+  std::vector<bool> omit(njets, false);
+  for (unsigned int iomit = 0; iomit < nomit; iomit++)
+  {
+    omit[order[iomit]] = true;
+  }
+
+  std::vector<unsigned int> keep{};
+  keep.reserve(njets - nomit);
+  for (unsigned int ijet = 0; ijet < njets; ijet++)
+  {
+    if (!omit[ijet])
+    {
+      keep.push_back(ijet);
+    }
+  }
+  return keep;
+}
+
+void DetermineTowerRho::CalcRho(JetContainer *jets, const std::vector<float> &signed_pt,
+                                const std::vector<unsigned int> &keep,
+                                const TowerRho::Method rho_method, float &rho, float &sigma) const
+{
+  rho = 0;
+  sigma = 0;
+
+  if (rho_method == TowerRho::Method::AREA)
+  {
+    const Jet::PROPERTY area_idx = jets->property_index(Jet::PROPERTY::prop_area);
+
+    std::vector<float> pT_over_X{};
+    float total_X = 0;
+    float njets_used = 0.0;
+    float empty_X = 0;
+    float const njets_total = static_cast<float>(keep.size());
+
+    for (const auto ijet : keep)
+    {
+      auto *jet = jets->get_jet(ijet);
+
+      float const this_X = jet->get_property(area_idx);
+      if (this_X <= 0 || this_X != this_X)
+      {
+        if (Verbosity() > 2)
+        {
+          std::cout << PHWHERE << " ::WARNING: Discarding jet with zero area. Zero-area jets may be due to (i) too large a ghost area (ii) a jet being outside the ghost range (iii) the computation not being done using an appropriate algorithm (kt;C/A)." << std::endl;
+        }
+        if (!std::isnan(this_X))
+        {
+          empty_X += this_X;
+        }
+        continue;  // skip this jet
+      }  // end of check on X
+
+      // pT and pT/X: either way the negative-energy towers are already back in, as the
+      // jet pT (a magnitude) or as the signed scalar sum
+      float const this_pT_over_X = JetPt(jets, signed_pt, ijet) / this_X;
+      pT_over_X.push_back(this_pT_over_X);
+      total_X += this_X;
+      njets_used += 1.0;
+    }  // end of loop over jets
+
+    if (empty_X != 0.0)
+    {
+      if (Verbosity() > 0)
+      {
+        std::cerr << PHWHERE << " ::WARNING: Found " << empty_X << " empty jets with zero area. This may be due to (i) too large a ghost area (ii) a jet being outside the ghost range (iii) the computation not being done using an appropriate algorithm (kt;C/A)." << std::endl;
+      }
+      total_X += empty_X;
+    }
+
+    float const n_empty_jets = njets_total - njets_used;
+    float mean_X = (1.0 * total_X) / (njets_total);
+    if (mean_X < 0)
+    {
+      std::cerr << PHWHERE << " mean_N < 0 , setting to 0" << std::endl;
+      mean_X = 0;
+    }
+
+    float tmp_med;
+    float tmp_std;
+    CalcMedianStd(pT_over_X, n_empty_jets, tmp_med, tmp_std);
+
+    sigma = std::sqrt(mean_X) * tmp_std;
+    rho = tmp_med;
+  }
+  else if (rho_method == TowerRho::Method::MULT)
+  {
+    std::vector<float> pt_over_nconst{};
+    int total_constituents = 0;
+
+    for (const auto ijet : keep)
+    {
+      auto *jet = jets->get_jet(ijet);
+
+      // one component per clustered input, so this is the number of constituents
+      size_t const nconst = jet->size_comp();
+      if (nconst > 0)
+      {
+        float const jet_avg_pt = JetPt(jets, signed_pt, ijet) / (1.0 * nconst);
+        pt_over_nconst.push_back(jet_avg_pt);
+        total_constituents += static_cast<int>(nconst);
+      }  // end of if nconst > 0
+    }  // end of loop over jets
+
+    float const n_empty_jets = 1.0 * (keep.size() - pt_over_nconst.size());
+    float mean_N = (1.0 * total_constituents) / (1.0 * keep.size());
+    if (mean_N < 0)
+    {
+      std::cerr << PHWHERE << " mean_N < 0 , setting to 0" << std::endl;
+      mean_N = 0;
+    }
+
+    float tmp_med;
+    float tmp_std;
+    CalcMedianStd(pt_over_nconst, 1.0 * n_empty_jets, tmp_med, tmp_std);
+
+    sigma = std::sqrt(mean_N) * tmp_std;
+    rho = tmp_med;
   }
 }
 
@@ -626,10 +665,10 @@ fastjet::Selector DetermineTowerRho::get_jet_selector() const
 {
   if (m_jet_min_pT != VOID_CUT)
   {
-    return (!fastjet::SelectorNHardest(m_omit_nhardest)) * (fastjet::SelectorAbsEtaMax(m_abs_jet_eta_range)) && (fastjet::SelectorPtMin(m_jet_min_pT));
+    return (fastjet::SelectorAbsEtaMax(m_abs_jet_eta_range)) && (fastjet::SelectorPtMin(m_jet_min_pT));
   }
   // default is no min jet pT
-  return (!fastjet::SelectorNHardest(m_omit_nhardest)) * (fastjet::SelectorAbsEtaMax(m_abs_jet_eta_range));
+  return fastjet::SelectorAbsEtaMax(m_abs_jet_eta_range);
 }
 
 void DetermineTowerRho::print_settings(std::ostream &os)
@@ -690,6 +729,8 @@ void DetermineTowerRho::print_settings(std::ostream &os)
     os << "CAMBRIDGE r=" << m_par;
   }
   os << std::endl;
+
+  os << "Estimator: " << (m_use_signed_sum ? "signed scalar sum of constituent pT" : "|vector sum| of constituent pT (jet pT)") << std::endl;
 
   os << "Tower eta range: " << m_abs_input_eta_range << std::endl;
   os << "Jet eta range: " << m_abs_jet_eta_range << std::endl;
