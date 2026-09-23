@@ -48,9 +48,14 @@ class DetermineTowerRho : public SubsysReco
   // sPHENIX jets are then dropped, and rho and sigma are estimated from the rest,
   // never from the fastjet jets.
   //
-  // If jet_node is non-empty, these same remaining jets are additionally written
-  // to the node tree as a JetContainer under that name, so they can be analysed
-  // downstream. The container also carries the resulting rho via
+  // If jet_node is non-empty, every selected jet -- the omitted hardest ones
+  // included -- is additionally written to the node tree as a JetContainer under
+  // that name, so they can be analysed downstream. Each jet carries
+  //   Jet::PROPERTY::prop_SeedItr : 1 if it was omitted as one of the hardest
+  //                                 (a seed), 0 if it entered rho
+  //   Jet::PROPERTY::prop_SeedD   : the signed scalar sum of its constituent pT
+  //                                 (see set_use_signed_sum), always filled
+  // The container also carries the resulting rho via
   // JetContainer::get_rho_median(). For the AREA method each jet carries its
   // fastjet area as Jet::PROPERTY::prop_area; jets with no area are stored but do
   // not enter the median, and pure-ghost jets (no real constituents) are stored

@@ -221,33 +221,45 @@ int DetermineTowerRho::process_event(PHCompositeNode *topNode)
       // estimate rho from the sPHENIX jets that remain
       CalcRho(m_scratch_jets, signed_pt, keep, rho_method, rho, sigma);
 
-      // save the jets that were used, if the caller asked for them
+      // save every selected jet, seeds included, if the caller asked for them
       const std::string &jet_node = m_jet_output_nodes.at(ipos);
       if (!jet_node.empty())
       {
         auto *jets = findNode::getClass<JetContainer>(topNode, jet_node);
         if (jets)
         {
-          std::vector<fastjet::PseudoJet> used_fastjets{};
-          used_fastjets.reserve(keep.size());
+          std::vector<float> saved_signed_pt{};
+          ConvertJets(jets, saved_signed_pt, fastjets, particles, with_area);
+          jets->set_rho_median(rho);
+
+          // prop_SeedItr: 1 = omitted from rho as one of the hardest (a seed),
+          //               0 = entered the rho estimate
+          // prop_SeedD   : the signed scalar sum of the constituent pT (E_T), stored
+          //               whichever quantity set_use_signed_sum selects
+          std::vector<bool> is_seed(fastjets.size(), true);
           for (const auto ijet : keep)
           {
-            used_fastjets.push_back(fastjets[ijet]);
+            is_seed[ijet] = false;
           }
-          std::vector<float> used_signed_pt{};
-          ConvertJets(jets, used_signed_pt, used_fastjets, particles, with_area);
-          jets->set_rho_median(rho);
+          const Jet::PROPERTY seed_idx = jets->property_index(Jet::PROPERTY::prop_SeedItr);
+          const Jet::PROPERTY signed_idx = jets->property_index(Jet::PROPERTY::prop_SeedD);
+          for (unsigned int ijet = 0; ijet < fastjets.size(); ijet++)
+          {
+            auto *jet = jets->get_jet(ijet);
+            jet->set_property(seed_idx, is_seed[ijet] ? 1.0F : 0.0F);
+            jet->set_property(signed_idx, saved_signed_pt[ijet]);
+          }
 
           if (m_save_fastjet_axis)
           {
             // rho has been estimated already, so only what is stored changes here
-            for (unsigned int ijet = 0; ijet < used_fastjets.size(); ijet++)
+            for (unsigned int ijet = 0; ijet < fastjets.size(); ijet++)
             {
               auto *jet = jets->get_jet(ijet);
-              jet->set_px(used_fastjets[ijet].px());
-              jet->set_py(used_fastjets[ijet].py());
-              jet->set_pz(used_fastjets[ijet].pz());
-              jet->set_e(used_fastjets[ijet].e());
+              jet->set_px(fastjets[ijet].px());
+              jet->set_py(fastjets[ijet].py());
+              jet->set_pz(fastjets[ijet].pz());
+              jet->set_e(fastjets[ijet].e());
             }
           }
 

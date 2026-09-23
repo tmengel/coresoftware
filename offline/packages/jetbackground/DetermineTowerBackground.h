@@ -119,7 +119,10 @@ class DetermineTowerBackground : public SubsysReco
   bool _reweight_failed{false};
 
   std::string m_towerNodePrefix{"TOWERINFO_CALIB"};
-  std::string m_jetnode{"AntiKt_TowerInfo_HIRecoSeedsRaw_r02"};
+  // Seed jets to read. Empty (default) = the standard node for the seed type:
+  // type 0 (1st iteration) AntiKt_TowerInfo_HIRecoSeedsRaw_r02,
+  // type 1 (2nd iteration) AntiKt_TowerInfo_HIRecoSeedsSub_r02 (from CopyAndSubtractJets).
+  std::string m_jetnode{""};
 
   std::string EMTowerName;
   std::string IHTowerName;

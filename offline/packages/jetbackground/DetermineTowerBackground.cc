@@ -225,10 +225,11 @@ int DetermineTowerBackground::process_event(PHCompositeNode *topNode)
   // seed type 0 is D > 3 R=0.2 jets run on retowerized CEMC
   if (_seed_type == 0)
   {
-    auto * reco2_jets = findNode::getClass<JetContainer>(topNode, m_jetnode);
+    const std::string seednode = m_jetnode.empty() ? "AntiKt_TowerInfo_HIRecoSeedsRaw_r02" : m_jetnode;
+    auto * reco2_jets = findNode::getClass<JetContainer>(topNode, seednode);
     if (!reco2_jets)
     {
-      std::cout << "DetermineTowerBackground::process_event: Cannot find " << m_jetnode << " node, exiting" << std::endl;
+      std::cout << "DetermineTowerBackground::process_event: Cannot find " << seednode << " node, exiting" << std::endl;
       exit(1);
     }
     if (Verbosity() > 1)
@@ -396,10 +397,12 @@ int DetermineTowerBackground::process_event(PHCompositeNode *topNode)
   // pT > 20 GeV
   if (_seed_type == 1)
   {
-    auto * reco2_jets = findNode::getClass<JetContainer>(topNode, m_jetnode);
+    // 2nd iteration seeds from the UE-subtracted R=0.2 jets unless overridden
+    const std::string seednode = m_jetnode.empty() ? "AntiKt_TowerInfo_HIRecoSeedsSub_r02" : m_jetnode;
+    auto * reco2_jets = findNode::getClass<JetContainer>(topNode, seednode);
     if (!reco2_jets)
     {
-      std::cout << "DetermineTowerBackground::process_event: Cannot find " << m_jetnode << " node, exiting" << std::endl;
+      std::cout << "DetermineTowerBackground::process_event: Cannot find " << seednode << " node, exiting" << std::endl;
     }
     if (Verbosity() > 1)
     {
